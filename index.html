@@ -15,7 +15,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <link rel="stylesheet" href="style.css?v=1">
+  <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body class="app-locked">
 
@@ -79,6 +79,21 @@
         </li>
         <li class="nav-item" data-section="calendar" onclick="switchSection('calendar')">
           <i class="fa-solid fa-calendar-days"></i><span> Lịch</span>
+        </li>
+        <li class="nav-item" data-section="drive" onclick="switchSection('drive')">
+          <i class="fa-solid fa-file-import"></i><span> UploadFile</span>
+        </li>
+        <li class="nav-item" data-section="mytasks" onclick="switchSection('mytasks')">
+          <i class="fa-solid fa-user-check"></i><span> Việc của tôi</span>
+        </li>
+        <li class="nav-item" data-section="tools" onclick="switchSection('tools')">
+          <i class="fa-solid fa-toolbox"></i><span> Công cụ</span>
+        </li>
+        <li class="nav-item" data-section="ai" onclick="switchSection('ai')">
+          <i class="fa-solid fa-robot"></i><span> AI</span>
+        </li>
+        <li class="nav-item" data-section="admin-users" onclick="switchSection('admin-users')">
+          <i class="fa-solid fa-user-gear"></i><span> Quản lý người dùng</span>
         </li>
       </ul>
     </nav>
@@ -404,6 +419,234 @@
       </div>
     </section>
 
+    <!-- ================= DRIVE SECTION ("UploadFile") ================= -->
+    <section class="app-section" id="drive-section">
+      <div class="section-hero-card card">
+        <div class="section-hero-info">
+          <h3><i class="fa-solid fa-file-import" style="color: var(--cyan-accent);"></i> Quản Lý Dữ Liệu &amp; Tải File</h3>
+          <p>Tải lên và quản lý tài liệu dùng chung của nhóm Science.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-bottom: 16px;">Tải Tài Liệu Lên Nguồn Chung</h3>
+        <form id="upload-file-form" enctype="multipart/form-data">
+          <div class="form-group" style="display:flex; flex-wrap:wrap; gap:16px;">
+            <label style="font-weight:600; font-size: 14px; display:flex; align-items:center; gap:6px;"><input type="radio" name="uploadType" value="file" checked> Tải file lẻ</label>
+            <label style="font-weight:600; font-size: 14px; display:flex; align-items:center; gap:6px;"><input type="radio" name="uploadType" value="folder"> Tải nguyên thư mục</label>
+          </div>
+          <div class="form-group">
+            <label for="file-input" class="file-upload-label" id="upload-label"><i class="fa-solid fa-cloud-arrow-up"></i> Chọn file từ máy tính<span id="file-name-display"> (Chưa có file nào)</span></label>
+            <input type="file" id="file-input" name="fileUpload" multiple style="display: none;">
+            <input type="file" id="folder-input" name="folderUpload" webkitdirectory directory multiple style="display: none;">
+          </div>
+          <div id="file-icon-preview" style="text-align: center; margin-bottom: 15px; min-height: 40px;"></div>
+          <div class="form-group"><textarea name="description" class="form-control" rows="2" placeholder="Thêm ghi chú về file (tùy chọn)"></textarea></div>
+          <button type="submit" id="submit-upload-btn" class="btn btn-primary"><i class="fa-solid fa-upload"></i> Tải Lên Drive</button>
+          <div id="upload-status" class="status-message"></div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-bottom: 16px;">Tìm Kiếm Nhanh</h3>
+        <div class="filter-bar">
+          <div class="form-group">
+            <label class="form-label" for="search-name">Tìm kiếm Tên File</label>
+            <input type="text" id="search-name" placeholder="Nhập tên file..." class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="filter-type">Bộ lọc Định dạng</label>
+            <select id="filter-type" class="form-select">
+              <option value="">Tất cả</option>
+              <option value="application/pdf">PDF</option>
+              <option value="image">Ảnh</option>
+              <option value="word">Word</option>
+              <option value="text">Text</option>
+              <option value="spreadsheet">Excel</option>
+              <option value="presentation">PPTX</option>
+              <option value="compressed">Zip</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="filter-uploader">Người Tải</label>
+            <select id="filter-uploader" class="form-select">
+              <option value="">Tất cả</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="filter-date">Ngày Tải</label>
+            <input type="date" id="filter-date" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="filter-sort">Sắp xếp</label>
+            <select id="filter-sort" class="form-select">
+              <option value="date_desc">Mới nhất</option>
+              <option value="date_asc">Cũ nhất</option>
+              <option value="name_asc">A-Z</option>
+              <option value="name_desc">Z-A</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex: 0 0 auto;">
+            <label class="form-label">&nbsp;</label>
+            <button type="button" id="apply-filter-btn" class="btn btn-secondary"><i class="fa-solid fa-filter"></i> Lọc</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table id="file-table" class="data-table">
+          <thead>
+            <tr>
+              <th>Tên File</th>
+              <th>Đường dẫn</th>
+              <th>Mô tả</th>
+              <th>Người Tải</th>
+              <th>Ngày Tải</th>
+              <th>Xem</th>
+              <th>Xóa</th>
+            </tr>
+          </thead>
+          <tbody><tr><td colspan="7" class="empty-state">Đang tải danh sách tài liệu...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================= MY TASKS SECTION ("Việc của tôi") ================= -->
+    <section class="app-section" id="mytasks-section">
+      <div class="section-hero-card card">
+        <div class="section-hero-info">
+          <h3><i class="fa-solid fa-user-check" style="color: var(--cyan-accent);"></i> Việc Của Tôi</h3>
+          <p>Công việc đang được giao cho bạn và khối lượng công việc của cả nhóm Science.</p>
+        </div>
+      </div>
+
+      <div id="mytasks-list" class="task-card-grid">
+        <div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> Đang tải...</div>
+      </div>
+
+      <h3 style="margin: 28px 0 14px 0;"><i class="fa-solid fa-scale-balanced" style="color: var(--cyan-accent); margin-right:8px;"></i>Khối lượng công việc của nhóm</h3>
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Thành viên</th>
+              <th style="text-align:center;">Đang mở</th>
+              <th style="text-align:center;">Chưa bắt đầu</th>
+              <th style="text-align:center;">Đang làm</th>
+              <th style="text-align:center;">Bị kẹt</th>
+              <th style="text-align:center;">Quá hạn</th>
+              <th style="text-align:center;">Ưu tiên cao</th>
+            </tr>
+          </thead>
+          <tbody id="workload-table-body"><tr><td colspan="7" class="empty-state">Đang tải...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================= TOOLS SECTION ("Công cụ") — static gallery, no API ================= -->
+    <section class="app-section" id="tools-section">
+      <div class="section-hero-card card">
+        <div class="section-hero-info">
+          <h3><i class="fa-solid fa-toolbox" style="color: var(--cyan-accent);"></i> Công Cụ</h3>
+          <p>Các công cụ dùng chung của WorkHub, mỗi công cụ mở trong tab mới.</p>
+        </div>
+      </div>
+
+      <div class="grid-3">
+        <div class="card">
+          <h3 style="display:flex; align-items:center; gap:10px; margin-bottom:8px;"><i class="fa-brands fa-discord" style="color: var(--cyan-accent);"></i> Discord File Saver</h3>
+          <p style="color:var(--text-secondary); font-size:14px; margin-bottom:16px;">Lưu lại file đính kèm từ Discord về máy nhanh chóng.</p>
+          <a class="btn btn-primary" href="https://discordfilesaver.pages.dev/" target="_blank" rel="noopener">Mở công cụ</a>
+        </div>
+        <div class="card">
+          <h3 style="display:flex; align-items:center; gap:10px; margin-bottom:8px;"><i class="fa-solid fa-video" style="color: var(--cyan-accent);"></i> Auto DownLoad Video Pro</h3>
+          <p style="color:var(--text-secondary); font-size:14px; margin-bottom:16px;">Tự động tải video từ nhiều nguồn khác nhau.</p>
+          <a class="btn btn-primary" href="https://autovideoproduction.pages.dev/" target="_blank" rel="noopener">Mở công cụ</a>
+        </div>
+        <div class="card">
+          <h3 style="display:flex; align-items:center; gap:10px; margin-bottom:8px;"><i class="fa-solid fa-closed-captioning" style="color: var(--cyan-accent);"></i> Auto Caption Video Pro</h3>
+          <p style="color:var(--text-secondary); font-size:14px; margin-bottom:16px;">Tự động tạo phụ đề cho video.</p>
+          <a class="btn btn-primary" href="https://autocaption-workhub.pages.dev/" target="_blank" rel="noopener">Mở công cụ</a>
+        </div>
+        <div class="card">
+          <h3 style="display:flex; align-items:center; gap:10px; margin-bottom:8px;"><i class="fa-solid fa-file-pdf" style="color: var(--cyan-accent);"></i> PDF-Pocket</h3>
+          <p style="color:var(--text-secondary); font-size:14px; margin-bottom:16px;">Bộ công cụ xử lý PDF nhanh gọn.</p>
+          <a class="btn btn-primary" href="https://pdf-pocket.pages.dev/" target="_blank" rel="noopener">Mở công cụ</a>
+        </div>
+        <div class="card">
+          <h3 style="display:flex; align-items:center; gap:10px; margin-bottom:8px;"><i class="fa-solid fa-robot" style="color: var(--cyan-accent);"></i> AI Auto-Uploader</h3>
+          <p style="color:var(--text-secondary); font-size:14px; margin-bottom:16px;">Hướng dẫn thiết lập công cụ tự động tải lên bằng AI.</p>
+          <a class="btn btn-primary" href="https://workhub-ai.pages.dev/tools/ai_uploader_setup/index.html" target="_blank" rel="noopener">Mở công cụ</a>
+        </div>
+        <div class="card">
+          <h3 style="display:flex; align-items:center; gap:10px; margin-bottom:8px;"><i class="fa-solid fa-grip" style="color: var(--cyan-accent);"></i> Xem tất cả công cụ</h3>
+          <p style="color:var(--text-secondary); font-size:14px; margin-bottom:16px;">Danh sách đầy đủ mọi công cụ hiện có của WorkHub.</p>
+          <a class="btn btn-secondary" href="https://workhub-ai.pages.dev/tools/" target="_blank" rel="noopener">Xem tất cả</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= AI SECTION — stub only, real backend scoped separately ================= -->
+    <section class="app-section" id="ai-section">
+      <h2><i class="fa-solid fa-robot"></i> AI Assistant</h2>
+      <p class="text-muted">Sắp ra mắt.</p>
+    </section>
+
+    <!-- ================= ADMIN USERS SECTION ("Quản lý người dùng") ================= -->
+    <section class="app-section" id="admin-users-section">
+      <div class="section-hero-card card">
+        <div class="section-hero-info">
+          <h3><i class="fa-solid fa-user-gear" style="color: var(--cyan-accent);"></i> Quản Lý Người Dùng</h3>
+          <p>Cấp quyền và quản lý hồ sơ người dùng của nhóm Science.</p>
+        </div>
+      </div>
+
+      <div id="admin-users-guard"></div>
+      <div id="admin-users-body" style="display:none;">
+        <div class="card">
+          <h3 style="margin-bottom:16px;">Cấp quyền trước cho email mới</h3>
+          <form id="provision-user-form" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
+            <div class="form-group" style="flex:1 1 200px; margin-bottom:0;">
+              <label class="form-label">Email</label>
+              <input type="email" id="provision-email" class="form-control" required placeholder="ten@vidu.com">
+            </div>
+            <div class="form-group" style="flex:1 1 200px; margin-bottom:0;">
+              <label class="form-label">Biệt danh</label>
+              <input type="text" id="provision-nickname" class="form-control" placeholder="(tùy chọn)">
+            </div>
+            <div class="form-group" style="flex:1 1 180px; margin-bottom:0;">
+              <label class="form-label">Quyền</label>
+              <select id="provision-group" class="form-select">
+                <option value="guest">Guest</option>
+                <option value="workhub-sci">Science (Workhub-Sci)</option>
+                <option value="admin">Admin</option>
+                <option value="all">All (Toàn quyền)</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex:0 0 auto; margin-bottom:0;">
+              <button type="submit" class="btn btn-primary">Cấp quyền</button>
+            </div>
+          </form>
+          <div style="font-size:12.5px; color:var(--text-muted); margin-top:10px;"><i class="fa-solid fa-circle-info" style="margin-right:4px;"></i>Người được cấp quyền trước vẫn cần tự đăng ký tài khoản đăng nhập bằng đúng email này thì mới vào được.</div>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Biệt danh</th>
+                <th>Quyền</th>
+                <th>Ngày tạo hồ sơ</th>
+                <th style="text-align:center;">Hành động</th>
+              </tr>
+            </thead>
+            <tbody id="admin-users-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     </main>
   </div>
 
@@ -605,7 +848,7 @@
     </div>
   </div>
 
-  <script src="api.js?v=1"></script>
-  <script src="script.js?v=1"></script>
+  <script src="api.js?v=2"></script>
+  <script src="script.js?v=2"></script>
 </body>
 </html>

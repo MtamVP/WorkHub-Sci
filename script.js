@@ -519,7 +519,14 @@ function skeletonListItems(count) {
   return html;
 }
 
-// -------------------- Section navigation (Pipeline / Task / Progress / Calendar) --------------------
+// -------------------- Section navigation (Pipeline / Task / Progress / Calendar / Drive / My Tasks / Tools / AI / Admin Users) --------------------
+
+const SECTION_KEYS = ['pipeline', 'task', 'progress', 'calendar', 'drive', 'mytasks', 'tools', 'ai', 'admin-users'];
+
+// Cờ tải-một-lần cho các section được nạp lười (chỉ gọi API lần đầu ghé thăm).
+// Pipeline/Task/Progress/Calendar không có mặt ở đây vì dữ liệu của chúng đã được
+// nạp sẵn ngay sau khi đăng nhập (xem resolveUserProfile ở trên).
+const SECTION_LOADED = { drive: false, mytasks: false, adminUsers: false };
 
 function switchSection(name) {
   document.querySelectorAll('.app-section').forEach(el => el.classList.remove('active'));
@@ -529,6 +536,17 @@ function switchSection(name) {
   const btn = document.querySelector('#app-sidebar .nav-item[data-section="' + name + '"]');
   if (section) section.classList.add('active');
   if (btn) btn.classList.add('active');
+
+  if (name === 'drive' && !SECTION_LOADED.drive) {
+    SECTION_LOADED.drive = true;
+    loadFileList();
+  } else if (name === 'mytasks' && !SECTION_LOADED.mytasks) {
+    SECTION_LOADED.mytasks = true;
+    loadMyTasks();
+  } else if (name === 'admin-users' && !SECTION_LOADED.adminUsers) {
+    SECTION_LOADED.adminUsers = true;
+    loadAdminUsers();
+  }
 }
 
 // -------------------- Task render helpers --------------------
@@ -1868,4 +1886,699 @@ document.addEventListener('DOMContentLoaded', () => {
       eventAttendeesExpanded = false;
     }
   });
+});
+
+// ==========================================================================
+// PORTED MODULES (round 2): Drive/UploadFile, "Việc của tôi" (My Tasks +
+// team workload), Tools gallery (static, no API), Quản lý người dùng
+// (Admin — user provisioning/group management). AI is a stub, no logic.
+// Ported from the WorkHub org dashboard reference for group_key
+// 'workhub-sci'. All callGAS(...) calls (org's GAS backend, which this app
+// does not have) were rewritten against API.* methods already implemented
+// in api.js for the Supabase backend.
+// ==========================================================================
+
+// -------------------- Drive / Upload File module --------------------
+
+function populateUploaderFilter(fileData) {
+  const filterUploader = document.getElementById('filter-uploader');
+  if (!filterUploader) return;
+
+  const uploaderEmails = new Set();
+  if (Array.isArray(fileData)) {
+    fileData.forEach(file => {
+      if (file.uploader) uploaderEmails.add(file.uploader);
+    });
+  }
+
+  const prevUploader = filterUploader.value;
+
+  filterUploader.innerHTML = '<option value="">Tất cả</option>';
+  uploaderEmails.forEach(email => {
+    const option = document.createElement('option');
+    option.value = email;
+    option.textContent = email.split('@')[0];
+    filterUploader.appendChild(option);
+  });
+
+  if (prevUploader && uploaderEmails.has(prevUploader)) filterUploader.value = prevUploader;
+}
+
+// quiet = true: tải lại sau khi upload/xóa/chia sẻ một file, không xóa trắng bảng
+// ra placeholder — cùng mẫu đã dùng cho Task/Progress/Calendar.
+async function loadFileList(isFiltering, options) {
+  const quiet = !!(options && options.quiet);
+  const fileTableBody = document.querySelector('#file-table tbody');
+  if (!fileTableBody) return;
+
+  const searchInput = document.getElementById('search-name');
+  const filterSelect = document.getElementById('filter-type');
+  const filterUploaderSelect = document.getElementById('filter-uploader');
+  const filterDateInput = document.getElementById('filter-date');
+  const filterSortSelect = document.getElementById('filter-sort');
+
+  const filters = {
+    searchName: searchInput ? searchInput.value : '',
+    mimeType: filterSelect ? filterSelect.value : '',
+    uploader: filterUploaderSelect ? filterUploaderSelect.value : '',
+    date: filterDateInput ? filterDateInput.value : '',
+    sortBy: filterSortSelect ? filterSortSelect.value : 'date_desc'
+  };
+
+  if (!quiet) {
+    fileTableBody.innerHTML = skeletonTableRows(7, 6);
+  }
+
+  try {
+    const fileData = await API.file.list(CURRENT_USER.groupKey, filters);
+
+    if (!isFiltering) {
+      populateUploaderFilter(fileData);
+    }
+
+    renderFileTable(fileData);
+    renderFileStats(fileData);
+  } catch (error) {
+    console.error('Lỗi tải file:', error);
+    if (!quiet) {
+      handleFileLoadFailure(error);
+    } else {
+      showToast('Lỗi tải file: ' + (error.message || error), 'error');
+    }
+  }
+}
+
+function renderFileTable(fileData) {
+  const fileTableBody = document.querySelector('#file-table tbody');
+  const fileTableHeadRow = document.querySelector('#file-table thead tr');
+  if (!fileTableBody || !fileTableHeadRow) return;
+
+  fileTableBody.innerHTML = '';
+
+  const showGroupCol = CURRENT_USER.groupKey === 'all' || CURRENT_USER.groupKey === 'admin';
+
+  let headerHTML = '<th>Tên File</th><th>Đường dẫn</th><th>Mô tả</th>';
+  if (showGroupCol) headerHTML += '<th style="text-align:center;">Nhóm</th>';
+  headerHTML += '<th>Người Tải</th><th>Ngày Tải</th><th style="text-align:center;">Xem</th><th style="text-align:center;">Share</th><th style="text-align:center;">Xóa</th>';
+  fileTableHeadRow.innerHTML = headerHTML;
+
+  if (!fileData || fileData.length === 0) {
+    const colCount = fileTableHeadRow.children.length;
+    fileTableBody.innerHTML = `<tr><td colspan="${colCount}" class="empty-state">Không tìm thấy tài liệu nào phù hợp.</td></tr>`;
+    return;
+  }
+
+  fileData.forEach(file => {
+    const row = fileTableBody.insertRow();
+
+    row.insertCell().textContent = file.name;
+    row.insertCell().textContent = file.folderPath || '/';
+    row.insertCell().textContent = file.description || '';
+
+    if (showGroupCol) {
+      const groupCell = row.insertCell();
+      groupCell.style.textAlign = 'center';
+      const groupLabel = USER_GROUP_LABELS[file.groupKey] || 'General';
+      groupCell.innerHTML = `<span class="status-pill pill-info">${escapeHtml(groupLabel)}</span>`;
+    }
+
+    row.insertCell().textContent = (file.uploader || '').split('@')[0];
+    row.insertCell().textContent = file.date;
+
+    const viewCell = row.insertCell();
+    viewCell.style.textAlign = 'center';
+    const viewLink = document.createElement('a');
+    viewLink.href = file.url;
+    viewLink.target = '_blank';
+    viewLink.title = 'Xem file';
+    viewLink.innerHTML = '<i class="fa-solid fa-eye"></i>';
+    viewCell.appendChild(viewLink);
+
+    const shareCell = row.insertCell();
+    shareCell.style.textAlign = 'center';
+    const shareBtn = document.createElement('button');
+    shareBtn.style.border = 'none';
+    shareBtn.style.background = 'none';
+    shareBtn.style.cursor = 'pointer';
+    shareBtn.onclick = () => shareFileAction(file.id, file.name);
+    if (file.isShared) {
+      shareBtn.innerHTML = '<i class="fa-solid fa-circle-check" style="color: var(--success-color); font-size: 1.1em;"></i>';
+      shareBtn.title = 'Đã chia sẻ cho cả nhóm';
+    } else {
+      shareBtn.innerHTML = '<i class="fa-solid fa-share-from-square" style="color: var(--cyan-accent); font-size: 1.05em;"></i>';
+      shareBtn.title = 'Chia sẻ cho cả nhóm';
+    }
+    shareCell.appendChild(shareBtn);
+
+    const deleteCell = row.insertCell();
+    deleteCell.style.textAlign = 'center';
+    const deleteBtn = document.createElement('button');
+    deleteBtn.title = 'Xóa file';
+    deleteBtn.style.border = 'none';
+    deleteBtn.style.background = 'none';
+    deleteBtn.style.cursor = 'pointer';
+    deleteBtn.innerHTML = '<i class="fa-solid fa-trash" style="color: var(--danger-color);"></i>';
+    deleteBtn.onclick = () => deleteFileAction(file.id, file.name);
+    deleteCell.appendChild(deleteBtn);
+  });
+}
+
+function handleFileLoadFailure(error) {
+  const fileTableBody = document.querySelector('#file-table tbody');
+  if (fileTableBody) {
+    let msg = error;
+    if (typeof error === 'object' && error !== null) {
+      msg = error.message || JSON.stringify(error);
+    }
+    fileTableBody.innerHTML = `<tr><td colspan="8" style="color: var(--danger-color); text-align: center;">Lỗi tải dữ liệu: ${escapeHtml(msg)}</td></tr>`;
+  }
+  console.error('Lỗi Drive API:', error);
+}
+
+function deleteFileAction(fileId, fileName) {
+  Swal.fire({
+    title: 'Xóa File?',
+    text: `Bạn có chắc muốn xóa file "${fileName}"?`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: 'var(--danger-color)',
+    cancelButtonColor: 'var(--text-muted)',
+    confirmButtonText: 'Xóa',
+    cancelButtonText: 'Hủy'
+  }).then(async (result) => {
+    if (!result.isConfirmed) return;
+    Swal.fire({ title: 'Đang xóa...', didOpen: () => Swal.showLoading() });
+    try {
+      const message = await API.file.delete(fileId, CURRENT_USER.groupKey);
+      Swal.close();
+      showToast(message, 'success');
+      loadFileList(false, { quiet: true });
+    } catch (err) {
+      Swal.close();
+      showToast('Lỗi xóa file: ' + (err.message || err), 'error');
+    }
+  });
+}
+
+// Không dùng trong app này (không có widget dashboard riêng như org), giữ lại để
+// port đủ theo hàm gốc — no-op an toàn vì #myfiles-list-view không tồn tại.
+function renderRecentFiles(fileData) {
+  const fileView = document.getElementById('myfiles-list-view');
+  if (!fileView) return;
+
+  if (!fileData || fileData.length === 0) {
+    fileView.innerHTML = '<p style="color: var(--text-secondary);">Chưa có tài liệu nào được tải lên.</p>';
+    return;
+  }
+
+  let html = '<ul style="list-style: none; padding: 0;">';
+  fileData.forEach(file => {
+    const fileNameLower = (file.name || '').toLowerCase();
+    let icon = 'fa-file';
+    if (fileNameLower.endsWith('.pdf')) icon = 'fa-file-pdf';
+    else if (fileNameLower.endsWith('.docx')) icon = 'fa-file-word';
+    else if (fileNameLower.endsWith('.xlsx')) icon = 'fa-file-excel';
+    else if (fileNameLower.endsWith('.pptx')) icon = 'fa-file-powerpoint';
+    else if (file.mimeType && file.mimeType.includes('image/')) icon = 'fa-file-image';
+    else if (fileNameLower.endsWith('.zip') || fileNameLower.endsWith('.rar')) icon = 'fa-file-zipper';
+
+    html += `
+      <li style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <i class="fa-solid ${icon}" style="color: var(--info-color);"></i>
+        <a href="${file.url}" target="_blank" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</a>
+      </li>`;
+  });
+  html += '</ul>';
+  fileView.innerHTML = html;
+}
+
+// Không có widget thống kê loại file trong bản port này (word-cnt/excel-cnt/... không
+// tồn tại trong markup) — giữ lại hàm để port đủ theo hàm gốc, mọi setContent() đều
+// no-op an toàn nếu không tìm thấy phần tử.
+function renderFileStats(fileData) {
+  if (!Array.isArray(fileData)) return;
+  const totalFiles = fileData.length;
+
+  const stats = fileData.reduce((acc, file) => {
+    if (!file) return acc;
+    const mime = file.mimeType || file.mime_type || file.type || '';
+    const fileName = file.name || 'Không rõ tên';
+    const fileNameLower = fileName.toLowerCase();
+
+    if (mime.includes('pdf') || fileNameLower.endsWith('.pdf')) acc.pdf++;
+    else if (mime.includes('word') || fileNameLower.endsWith('.doc') || fileNameLower.endsWith('.docx')) acc.word++;
+    else if (mime.includes('spreadsheet') || mime.includes('excel') || fileNameLower.endsWith('.xls') || fileNameLower.endsWith('.xlsx')) acc.excel++;
+    else if (mime.includes('image/') || /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(fileNameLower)) acc.image++;
+    else if (mime.includes('presentation') || mime.includes('powerpoint') || fileNameLower.endsWith('.ppt') || fileNameLower.endsWith('.pptx')) acc.pptx++;
+    else if (mime.includes('zip') || mime.includes('rar') || fileNameLower.endsWith('.zip') || fileNameLower.endsWith('.rar')) acc.zip++;
+
+    return acc;
+  }, { pdf: 0, word: 0, excel: 0, image: 0, pptx: 0, zip: 0 });
+
+  const setContent = (id, count) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = count;
+  };
+
+  setContent('word-cnt', stats.word);
+  setContent('excel-cnt', stats.excel);
+  setContent('pdf-cnt', stats.pdf);
+  setContent('image-cnt', stats.image);
+  setContent('pptx-cnt', stats.pptx);
+  setContent('zip-cnt', stats.zip);
+  setContent('total-cnt', totalFiles);
+}
+
+function shareFileAction(fileId, fileName) {
+  Swal.fire({
+    title: 'Chia sẻ file?',
+    html: `Bạn muốn chia sẻ file <b>"${escapeHtml(fileName)}"</b> cho cả nhóm?<br><small style="color:var(--text-muted);">Tất cả thành viên sẽ nhìn thấy file này.</small>`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: 'var(--cyan-accent)',
+    cancelButtonColor: 'var(--text-muted)',
+    confirmButtonText: 'Chia sẻ',
+    cancelButtonText: 'Hủy'
+  }).then(async (result) => {
+    if (!result.isConfirmed) return;
+    Swal.fire({ title: 'Đang xử lý...', didOpen: () => Swal.showLoading() });
+    try {
+      const message = await API.file.share(fileId, CURRENT_USER.groupKey);
+      Swal.fire('Thành công!', message, 'success');
+      loadFileList(false, { quiet: true });
+    } catch (err) {
+      Swal.fire('Lỗi!', err.message || String(err), 'error');
+    }
+  });
+}
+
+// -------------------- "Việc của tôi" (My Tasks + team workload) module --------------------
+
+async function loadMyTasks() {
+  const container = document.getElementById('mytasks-list');
+  if (!container) return;
+  container.innerHTML = skeletonListItems(4);
+
+  const email = CURRENT_USER.email;
+  if (!email) {
+    container.innerHTML = '<div class="empty-state">Chưa đăng nhập.</div>';
+    return;
+  }
+
+  try {
+    const tasks = await API.task.listMine(email, CURRENT_USER.groupKey);
+    renderMyTasks(tasks || []);
+  } catch (err) {
+    container.innerHTML = `<div class="empty-state" style="color: var(--danger-color);">Lỗi: ${escapeHtml(err.message || String(err))}</div>`;
+  }
+
+  loadWorkload();
+}
+
+async function loadWorkload() {
+  const tbody = document.getElementById('workload-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i></td></tr>';
+
+  try {
+    const rows = await API.task.workload(CURRENT_USER.groupKey);
+    renderWorkload(rows || []);
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color: var(--danger-color);">Lỗi: ${escapeHtml(err.message || String(err))}</td></tr>`;
+  }
+}
+
+function renderWorkload(rows) {
+  const tbody = document.getElementById('workload-table-body');
+  if (!tbody) return;
+
+  if (!rows || rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Không có công việc nào đang mở.</td></tr>';
+    return;
+  }
+
+  const busiest = Math.max(...rows.map(r => r.total), 1);
+
+  tbody.innerHTML = rows.map(r => {
+    const share = Math.round((r.total / busiest) * 100);
+    return `<tr>
+      <td style="font-weight:700;">
+        ${escapeHtml(r.name)}
+        <div class="workload-bar"><span style="width:${share}%"></span></div>
+      </td>
+      <td style="text-align:center; font-weight:700;">${r.total}</td>
+      <td style="text-align:center; color:var(--text-muted);">${r.notStarted}</td>
+      <td style="text-align:center;">${r.working}</td>
+      <td style="text-align:center; ${r.stuck > 0 ? 'color:var(--danger-color); font-weight:700;' : 'color:var(--text-muted);'}">${r.stuck}</td>
+      <td style="text-align:center; ${r.overdue > 0 ? 'color:var(--danger-color); font-weight:700;' : 'color:var(--text-muted);'}">${r.overdue}</td>
+      <td style="text-align:center; ${r.highPriority > 0 ? 'color:var(--warning-color); font-weight:700;' : 'color:var(--text-muted);'}">${r.highPriority}</td>
+    </tr>`;
+  }).join('');
+}
+
+// LƯU Ý: khác với org, không gọi getBlockedBadge(t) — task dependencies chưa được port
+// vào app này nên hàm đó không tồn tại.
+function renderMyTasks(tasks) {
+  const container = document.getElementById('mytasks-list');
+  if (!container) return;
+
+  if (!tasks || tasks.length === 0) {
+    container.innerHTML = '<div class="empty-state">Bạn không có công việc nào đang được giao.</div>';
+    return;
+  }
+
+  container.innerHTML = tasks.map(t => {
+    const safeName = escapeHtml(t.name);
+    const safeProjectId = escapeHtml(escapeJs(t.project_id));
+    const statusColor = getStatusColor(t.status);
+    return `
+      <div class="task-card" style="border-left-color:${statusColor}; cursor:pointer;" onclick="goToTaskInProject('${safeProjectId}')">
+        <div class="card-row">
+          <span class="task-title">${safeName}</span>
+          ${renderBadge('priority', t.priority)}
+        </div>
+        <div class="card-row"><span class="card-label">Dự án</span><span>${escapeHtml(t.projectName || '')}</span></div>
+        <div class="card-row" style="flex-wrap:wrap; gap:8px; justify-content:flex-start;">
+          ${renderBadge('status', t.status)}
+          ${t.dueDate ? `<span style="font-size:12.5px; color:var(--text-muted);">Hạn: ${escapeHtml(t.dueDate)}</span>` : ''}
+          ${getDueDateBadge(t.dueDate, t.status)}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// Nhảy từ "Việc của tôi" sang màn Nhiệm Vụ của đúng dự án chứa task đó
+function goToTaskInProject(projectId) {
+  const taskNavItem = document.querySelector('.nav-item[data-section="task"]');
+  if (taskNavItem) taskNavItem.click();
+
+  let attempts = 0;
+  const tryPick = () => {
+    const select = document.getElementById('task-project-select');
+    const hasOption = select && Array.from(select.options).some(o => o.value === projectId);
+    if (hasOption) {
+      select.value = projectId;
+      select.dispatchEvent(new Event('change'));
+    } else if (attempts < 20) {
+      attempts++;
+      setTimeout(tryPick, 200);
+    }
+  };
+  setTimeout(tryPick, 200);
+}
+
+// -------------------- Quản lý người dùng (Admin) module --------------------
+// Chỉ quản lý hồ sơ quyền (bảng public.users), không tạo/xóa được tài khoản đăng
+// nhập Supabase Auth thật (trừ lúc cấp quyền mới, có gọi kèm signUp mật khẩu mặc định).
+
+const USER_GROUP_LABELS = { guest: 'Guest', 'workhub-sci': 'Science', admin: 'Admin', all: 'All (Toàn quyền)' };
+
+async function loadAdminUsers() {
+  const guard = document.getElementById('admin-users-guard');
+  const body = document.getElementById('admin-users-body');
+  if (!guard || !body) return;
+
+  body.style.display = 'none';
+  guard.innerHTML = '<div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> Đang kiểm tra quyền...</div>';
+
+  // Rộng hơn org một chút: ALLOWED_GROUPS của app này công nhận cả 'admin' lẫn 'all'
+  // là quyền cao cấp, nên gate ở đây khớp với đúng mô hình quyền đang dùng của app.
+  if (CURRENT_USER.groupKey !== 'all' && CURRENT_USER.groupKey !== 'admin') {
+    guard.innerHTML = '<div class="empty-state" style="color: var(--danger-color);"><i class="fa-solid fa-lock fa-2x" style="display:block; margin-bottom:8px;"></i>Bạn không có quyền truy cập trang này.</div>';
+    return;
+  }
+
+  guard.innerHTML = '';
+  body.style.display = 'block';
+  loadAdminUsersTable();
+}
+
+async function loadAdminUsersTable() {
+  const tbody = document.getElementById('admin-users-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = skeletonTableRows(5, 5);
+
+  try {
+    const users = await API.user.listAll();
+    renderAdminUsersTable(users || []);
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color: var(--danger-color);">Lỗi: ${escapeHtml(err.message || String(err))}</td></tr>`;
+  }
+}
+
+function renderAdminUsersTable(users) {
+  const tbody = document.getElementById('admin-users-table-body');
+  if (!tbody) return;
+
+  if (!users || users.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Chưa có hồ sơ người dùng nào.</td></tr>';
+    return;
+  }
+
+  const myEmail = CURRENT_USER.email;
+
+  tbody.innerHTML = users.map(u => {
+    const safeEmail = escapeHtml(escapeJs(u.email));
+    const groupOptions = Object.keys(USER_GROUP_LABELS).map(g =>
+      `<option value="${g}" ${g === u.group_key ? 'selected' : ''}>${USER_GROUP_LABELS[g]}</option>`
+    ).join('');
+    const createdStr = u.created_at ? new Date(u.created_at).toLocaleDateString('vi-VN') : '--';
+    const isSelf = !!(myEmail && myEmail.toLowerCase() === (u.email || '').toLowerCase());
+
+    return `
+      <tr>
+        <td>${escapeHtml(u.email)}${isSelf ? ' <span class="status-pill pill-neutral">Bạn</span>' : ''}</td>
+        <td>${escapeHtml(u.nickname || '')}</td>
+        <td>
+          <select class="form-select" style="min-width:160px; padding:6px 10px; font-size:13px;" onchange="updateUserGroupAction('${safeEmail}', this.value)">
+            ${groupOptions}
+          </select>
+        </td>
+        <td style="font-size:12.5px; color:var(--text-muted);">${createdStr}</td>
+        <td style="text-align:center;">
+          <button class="btn btn-danger" style="padding:6px 10px;" title="Thu hồi quyền" onclick="removeUserAction('${safeEmail}', ${isSelf})">
+            <i class="fa-solid fa-user-slash"></i>
+          </button>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+async function updateUserGroupAction(email, newGroup) {
+  try {
+    const message = await API.user.updateGroup(email, newGroup);
+    showToast(message, 'success');
+  } catch (err) {
+    showToast('Lỗi: ' + (err.message || err), 'error');
+    loadAdminUsersTable();
+  }
+}
+
+function removeUserAction(email, isSelf) {
+  Swal.fire({
+    title: isSelf ? 'Bạn đang tự thu hồi quyền của chính mình?' : `Thu hồi quyền của ${email}?`,
+    text: isSelf
+      ? 'Bạn sẽ mất quyền truy cập ngay khi hồ sơ bị xóa. Hành động khó hoàn tác nếu không còn ai khác có quyền "all".'
+      : 'Người này sẽ không truy cập được app nữa. Tài khoản đăng nhập của họ (nếu có) vẫn còn tồn tại, chỉ mất hồ sơ quyền.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: 'var(--danger-color)',
+    confirmButtonText: 'Thu hồi',
+    cancelButtonText: 'Hủy'
+  }).then(async (result) => {
+    if (!result.isConfirmed) return;
+    try {
+      const message = await API.user.remove(email);
+      showToast(message, 'success');
+      loadAdminUsersTable();
+    } catch (err) {
+      showToast('Lỗi: ' + (err.message || err), 'error');
+    }
+  });
+}
+
+// -------------------- Wiring: Upload form + Drive filters + Provision-user form --------------------
+
+document.addEventListener('DOMContentLoaded', () => {
+  const uploadForm = document.getElementById('upload-file-form');
+  const fileInput = document.getElementById('file-input');
+  const folderInput = document.getElementById('folder-input');
+  const submitUploadBtn = document.getElementById('submit-upload-btn');
+  const applyFilterBtn = document.getElementById('apply-filter-btn');
+  const searchInput = document.getElementById('search-name');
+  const filterSortSelect = document.getElementById('filter-sort');
+  const filterTypeSelect = document.getElementById('filter-type');
+  const filterUploaderSelect = document.getElementById('filter-uploader');
+  const filterDateInput = document.getElementById('filter-date');
+
+  if (uploadForm) {
+    const uploadTypeRadios = uploadForm.querySelectorAll('input[name="uploadType"]');
+    const uploadLabel = document.getElementById('upload-label');
+
+    uploadTypeRadios.forEach(radio => {
+      radio.addEventListener('change', function () {
+        if (this.value === 'folder') {
+          uploadLabel.setAttribute('for', 'folder-input');
+          uploadLabel.innerHTML = '<i class="fa-solid fa-folder-tree"></i> Chọn thư mục từ máy tính<span id="file-name-display"> (Chưa chọn thư mục)</span>';
+        } else {
+          uploadLabel.setAttribute('for', 'file-input');
+          uploadLabel.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Chọn file từ máy tính<span id="file-name-display"> (Chưa có file nào)</span>';
+        }
+        const preview = document.getElementById('file-icon-preview');
+        if (preview) preview.innerHTML = '';
+      });
+    });
+
+    const handleFileInputChange = function () {
+      if (this.files.length > 0) {
+        const fileNameDisplay = document.getElementById('file-name-display');
+        const fileIconPreview = document.getElementById('file-icon-preview');
+
+        if (this.files.length === 1) {
+          const file = this.files[0];
+          const fileName = file.name.toLowerCase();
+          if (fileNameDisplay) fileNameDisplay.textContent = ' (' + file.name + ')';
+
+          let iconClass = 'fa-file';
+          if (fileName.endsWith('.pdf')) iconClass = 'fa-file-pdf';
+          else if (fileName.endsWith('.docx')) iconClass = 'fa-file-word';
+          else if (file.type && file.type.startsWith('image/')) iconClass = 'fa-file-image';
+          else if (fileName.endsWith('.xlsx')) iconClass = 'fa-file-excel';
+
+          if (fileIconPreview) fileIconPreview.innerHTML = `<i class="fa-solid ${iconClass}" style="font-size: 36px; color: var(--text-secondary);"></i>`;
+        } else {
+          if (fileNameDisplay) fileNameDisplay.textContent = ' (Đã chọn ' + this.files.length + ' files)';
+          if (fileIconPreview) fileIconPreview.innerHTML = `<i class="fa-solid fa-copy" style="font-size: 36px; color: var(--cyan-accent);"></i>`;
+        }
+        if (submitUploadBtn) submitUploadBtn.disabled = false;
+      }
+    };
+
+    if (fileInput) fileInput.addEventListener('change', handleFileInputChange);
+    if (folderInput) folderInput.addEventListener('change', handleFileInputChange);
+
+    uploadForm.addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      const checkedType = document.querySelector('input[name="uploadType"]:checked');
+      const uploadType = checkedType ? checkedType.value : 'file';
+      const inputElement = uploadType === 'folder' ? folderInput : fileInput;
+
+      if (!inputElement || !inputElement.files.length) {
+        showToast('Vui lòng chọn file/thư mục để tải lên!', 'error');
+        return;
+      }
+
+      if (submitUploadBtn) submitUploadBtn.disabled = true;
+      const originalBtnText = submitUploadBtn ? submitUploadBtn.innerHTML : '';
+
+      const descInput = uploadForm.querySelector('[name="description"]');
+      const descriptionValue = descInput ? descInput.value : '';
+      const totalFiles = inputElement.files.length;
+      let successCount = 0;
+
+      const readFileAsBase64 = (f) => new Promise((resolve) => {
+        const r = new FileReader();
+        r.onload = (ev) => resolve(ev.target.result.split(',')[1]);
+        r.readAsDataURL(f);
+      });
+
+      try {
+        for (let i = 0; i < totalFiles; i++) {
+          const file = inputElement.files[i];
+          if (submitUploadBtn) submitUploadBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang tải ${i + 1}/${totalFiles}...`;
+
+          const base64Data = await readFileAsBase64(file);
+
+          let folderPath = '';
+          if (uploadType === 'folder' && file.webkitRelativePath) {
+            const parts = file.webkitRelativePath.split('/');
+            parts.pop();
+            folderPath = parts.join('/');
+          }
+
+          await API.file.upload(base64Data, file.name, file.type || 'application/octet-stream', CURRENT_USER.groupKey, descriptionValue, CURRENT_USER.email, folderPath);
+          successCount++;
+        }
+
+        showToast(`Tải lên thành công ${successCount} file!`, 'success');
+        uploadForm.reset();
+        loadFileList(false, { quiet: true });
+
+        const checkedRadio = document.querySelector('input[name="uploadType"]:checked');
+        if (checkedRadio) {
+          checkedRadio.dispatchEvent(new Event('change'));
+        } else {
+          const displaySpan = document.getElementById('file-name-display');
+          if (displaySpan) displaySpan.textContent = ' (Chưa có file nào)';
+        }
+
+        const preview = document.getElementById('file-icon-preview');
+        if (preview) preview.innerHTML = '';
+      } catch (err) {
+        showToast('Lỗi tải file: ' + (err.message || err), 'error');
+      } finally {
+        if (submitUploadBtn) {
+          submitUploadBtn.disabled = false;
+          submitUploadBtn.innerHTML = originalBtnText;
+        }
+      }
+    });
+  }
+
+  let driveSearchTimeout = null;
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      if (driveSearchTimeout) clearTimeout(driveSearchTimeout);
+      driveSearchTimeout = setTimeout(() => loadFileList(true), 500);
+    });
+  }
+
+  const directFilters = [filterSortSelect, filterTypeSelect, filterUploaderSelect, filterDateInput];
+  directFilters.forEach(el => {
+    if (el) el.addEventListener('change', () => loadFileList(true));
+  });
+
+  if (applyFilterBtn) {
+    applyFilterBtn.addEventListener('click', () => loadFileList(true));
+  }
+
+  // Form cấp quyền trước cho người dùng (Admin)
+  const provisionUserForm = document.getElementById('provision-user-form');
+  if (provisionUserForm) {
+    provisionUserForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const emailInput = document.getElementById('provision-email');
+      const nicknameInput = document.getElementById('provision-nickname');
+      const groupSelect = document.getElementById('provision-group');
+      const email = emailInput ? emailInput.value.trim() : '';
+      if (!email) return;
+
+      try {
+        const message = await API.user.provision(email, nicknameInput ? nicknameInput.value.trim() : '', groupSelect ? groupSelect.value : 'guest');
+
+        // Tự động tạo user bên Supabase Auth với mật khẩu mặc định 123456.
+        // Dùng client phụ để không làm văng phiên đăng nhập của Admin hiện tại.
+        if (window.supabase) {
+          const tempClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+            auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+          });
+          const signUpRes = await tempClient.auth.signUp({
+            email: email,
+            password: '123456',
+            options: { data: { nickname: nicknameInput ? nicknameInput.value.trim() : '' } }
+          });
+          if (signUpRes.error && signUpRes.error.message !== 'User already registered') {
+            console.warn('Cảnh báo Auth:', signUpRes.error.message);
+          }
+        }
+
+        showToast(message, 'success');
+        provisionUserForm.reset();
+        loadAdminUsersTable();
+      } catch (err) {
+        showToast('Lỗi: ' + (err.message || err), 'error');
+      }
+    });
+  }
 });

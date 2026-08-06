@@ -1271,10 +1271,63 @@ body.app-locked .user-profile-wrapper {
 .btn-delete-event-mini:hover { color: var(--danger-color); background: color-mix(in srgb, var(--danger-color) 12%, transparent); }
 .btn-edit-event-mini:hover { color: var(--info-color); background: color-mix(in srgb, var(--info-color) 12%, transparent); }
 
+/* ---------------------------------------------------------------------- */
+/* 11. DRIVE / UPLOAD FILE MODULE                                          */
+/* ---------------------------------------------------------------------- */
+.file-upload-label {
+  padding: 32px;
+  border-radius: var(--radius-md);
+  text-align: center; cursor: pointer;
+  color: var(--text-muted);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  background: var(--hover-bg);
+  border: 2px dashed var(--border-color);
+  transition: var(--transition-fast, all 0.2s ease);
+}
+.file-upload-label i { font-size: 1.8rem; margin-bottom: 4px; color: var(--text-muted); transition: 0.2s; }
+.file-upload-label:hover {
+  border-color: var(--cyan-accent); border-style: solid;
+  background: var(--info-bg); color: var(--text-primary);
+}
+.file-upload-label:hover i { color: var(--cyan-accent); }
+
+.status-message { padding: 14px; border-radius: var(--radius-md); font-weight: 600; margin-top: 14px; display: flex; align-items: center; gap: 10px; }
+.status-message:empty { display: none; margin-top: 0; padding: 0; }
+.success-message { background-color: color-mix(in srgb, var(--success-color) 12%, var(--card-bg)); border: 1px solid color-mix(in srgb, var(--success-color) 30%, transparent); color: var(--success-color); }
+.error-message { background-color: color-mix(in srgb, var(--danger-color) 12%, var(--card-bg)); border: 1px solid color-mix(in srgb, var(--danger-color) 30%, transparent); color: var(--danger-color); }
+
+/* ---------------------------------------------------------------------- */
+/* 12. "VIỆC CỦA TÔI" (MY TASKS + WORKLOAD) MODULE                         */
+/* ---------------------------------------------------------------------- */
+.task-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+
+.task-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  box-shadow: var(--shadow-soft);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--cyan-accent);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  display: flex; flex-direction: column; gap: 12px; position: relative;
+}
+.task-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-2px); }
+
+.task-card .card-row { display: flex; align-items: center; justify-content: space-between; font-size: 13.5px; color: var(--text-primary); font-weight: 500; }
+.task-card .card-label { font-weight: 700; color: var(--text-muted); font-size: 11px; min-width: 60px; text-transform: uppercase; letter-spacing: 0.04em; }
+.task-card .task-title { font-size: 1.05rem; font-weight: 800; color: var(--text-primary); margin: 0; line-height: 1.4; }
+
+.workload-bar {
+  height: 4px; margin-top: 5px; border-radius: var(--radius-pill);
+  background: var(--hover-bg); overflow: hidden; max-width: 220px;
+}
+.workload-bar > span { display: block; height: 100%; background: var(--cyan-accent); border-radius: inherit; }
+
 @media (max-width: 768px) {
   #main-content { padding: 16px; }
   .grid-2 { grid-template-columns: 1fr; }
   #app-header { padding: 0 16px; }
   .form-row-2 { grid-template-columns: 1fr; }
   .calendar-layout { flex-direction: column; }
+  .task-card-grid { grid-template-columns: 1fr; }
 }
