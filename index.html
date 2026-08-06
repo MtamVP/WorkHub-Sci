@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Science Research Pipeline Workspace — Quy trình 6 giai đoạn thu thập, phân loại, làm giàu siêu dữ liệu, kiểm duyệt tái lập và xuất bản kho dữ liệu AI">
+  <title>Science Pipeline — WorkHub Science</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header id="app-header">
+    <div class="brand-section">
+      <div class="brand-logo"><i class="fa-solid fa-atom"></i></div>
+      <div class="brand-title-group">
+        <h1>WorkHub <span class="brand-badge">Science Pipeline</span></h1>
+        <p class="brand-subtitle">Khu làm việc của nhóm Science</p>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <a href="https://workhub-ai.pages.dev/" class="header-btn" title="Về trang chủ" style="width: auto; padding: 0 14px; font-size: 13px; font-weight: 600; gap: 6px; color: var(--cyan-accent); border-color: rgba(0,210,255,0.3);">
+        <i class="fa-solid fa-house"></i>
+        <span>Trang chủ</span>
+      </a>
+
+      <button class="header-btn" id="theme-toggle-btn" title="Dark/Light Mode">
+        <i class="fa-solid fa-moon"></i>
+      </button>
+
+      <button class="header-btn" id="observation-toggle-btn" title="Observatory">
+        <i class="fa-solid fa-bell"></i>
+        <span class="noti-badge" id="noti-unread-indicator"></span>
+      </button>
+
+      <div class="user-profile-badge" id="user-badge">
+        <div class="user-avatar" id="user-avatar-text">SC</div>
+        <span id="user-display-name">Science Specialist</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-container">
+
+    <section class="pipeline-overview-card">
+      <div class="pipeline-header-row">
+        <div class="pipeline-headline">
+          <h2>Pipeline gồm 6 giai đoạn (Maybe)</h2>
+          <p>Từ dữ liệu thô (Bronze Layer) qua chuẩn hóa (Silver Layer) đến báo cáo và cuối cùng đi vô (Gold Layer)</p>
+        </div>
+      </div>
+
+      <div class="pipeline-stepper-container">
+        <div class="pipeline-stepper">
+          <div class="stepper-progress-line">
+            <div class="stepper-progress-fill" id="stepper-progress-fill"></div>
+          </div>
+
+          <div class="step-item active" data-stage="s1" onclick="switchStage('s1')">
+            <div class="step-circle"><i class="fa-solid fa-cloud-arrow-down"></i></div>
+            <div class="step-text">
+              <span class="step-code">S1</span>
+              <span class="step-title">Ingest</span>
+              <span class="step-layer-tag tag-bronze">Bronze</span>
+            </div>
+          </div>
+
+          <div class="step-item" data-stage="s2" onclick="switchStage('s2')">
+            <div class="step-circle"><i class="fa-solid fa-circle-check"></i></div>
+            <div class="step-text">
+              <span class="step-code">S2</span>
+              <span class="step-title">Validation</span>
+              <span class="step-layer-tag tag-bronze">Bronze</span>
+            </div>
+          </div>
+
+          <div class="step-item" data-stage="s3" onclick="switchStage('s3')">
+            <div class="step-circle"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+            <div class="step-text">
+              <span class="step-code">S3</span>
+              <span class="step-title">Enrichment</span>
+              <span class="step-layer-tag tag-silver">Silver</span>
+            </div>
+          </div>
+
+          <div class="step-item" data-stage="s4" onclick="switchStage('s4')">
+            <div class="step-circle"><i class="fa-solid fa-clipboard-check"></i></div>
+            <div class="step-text">
+              <span class="step-code">S4</span>
+              <span class="step-title">Quality Review</span>
+              <span class="step-layer-tag tag-silver">Silver</span>
+            </div>
+          </div>
+
+          <div class="step-item" data-stage="s5" onclick="switchStage('s5')">
+            <div class="step-circle"><i class="fa-solid fa-box-open"></i></div>
+            <div class="step-text">
+              <span class="step-code">S5</span>
+              <span class="step-title">Gold Publish</span>
+              <span class="step-layer-tag tag-gold">Gold</span>
+            </div>
+          </div>
+
+          <div class="step-item" data-stage="s6" onclick="switchStage('s6')">
+            <div class="step-circle"><i class="fa-solid fa-share-nodes"></i></div>
+            <div class="step-text">
+              <span class="step-code">S6</span>
+              <span class="step-title">Repo Export</span>
+              <span class="step-layer-tag tag-cyan">Gold AI</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="stage-detail-card" style="margin-top: 24px; padding: 28px;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+            <span class="status-pill pill-info" id="stage-badge-layer" style="font-size: 13px; font-weight: 700;">Lớp Bronze</span>
+            <h3 id="stage-title" style="font-size: 1.4rem; font-weight: 700; margin: 0; color: var(--text-primary);">S1 - Ingest Data</h3>
+          </div>
+          <p id="stage-desc" style="color: var(--text-secondary); font-size: 14px; max-width: 800px; line-height: 1.6; margin: 0;">
+            Lấy data từ bên ngoài đưa vào để tiến hành pipeline
+          </p>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <button class="btn btn-outline" id="prev-stage-btn" onclick="navStage(-1)"><i class="fa-solid fa-arrow-left"></i> Giai đoạn trước</button>
+          <button class="btn btn-primary" id="next-stage-btn" onclick="navStage(1)">Giai đoạn tiếp theo <i class="fa-solid fa-arrow-right"></i></button>
+        </div>
+      </div>
+
+      <div class="grid-3" style="margin-top: 24px;">
+        <div class="metric-box">
+          <div class="label">Vị trí lưu trữ dữ liệu</div>
+          <div class="value" id="stage-storage-tier" style="font-size: 1.1rem; color: var(--cyan-accent);">WorkHub Storage: science_bucket/bronze/</div>
+          <div class="desc">Storage Tier</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <aside id="observation-drawer">
+    <div class="drawer-header">
+      <h4><i class="fa-solid fa-radar" style="color: var(--cyan-accent);"></i> Observation</h4>
+      <button class="header-btn" id="drawer-close-btn" onclick="toggleObservationDrawer()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="drawer-body" id="observation-logs-container">
+
+    </div>
+  </aside>
+
+  <script src="api.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
