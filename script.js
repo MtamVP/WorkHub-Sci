@@ -422,6 +422,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderObservationLogs();
   updateStageUI('s1');
 
+  // Sidebar điều hướng: mặc định mở rộng trên desktop, thu gọn trên mobile
+  const sidebarEl = document.getElementById('app-sidebar');
+  const hamburgerBtn = document.getElementById('hamburger-menu');
+  if (sidebarEl && window.innerWidth > 768) sidebarEl.classList.add('expanded');
+  if (hamburgerBtn && sidebarEl) {
+    hamburgerBtn.addEventListener('click', () => sidebarEl.classList.toggle('expanded'));
+  }
+
   await initAuth();
 
   const notiBtn = document.getElementById('observation-toggle-btn');
@@ -515,10 +523,10 @@ function skeletonListItems(count) {
 
 function switchSection(name) {
   document.querySelectorAll('.app-section').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.section-nav-btn').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('#app-sidebar .nav-item').forEach(el => el.classList.remove('active'));
 
   const section = document.getElementById(name + '-section');
-  const btn = document.querySelector('.section-nav-btn[data-section="' + name + '"]');
+  const btn = document.querySelector('#app-sidebar .nav-item[data-section="' + name + '"]');
   if (section) section.classList.add('active');
   if (btn) btn.classList.add('active');
 }
