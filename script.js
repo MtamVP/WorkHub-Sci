@@ -681,7 +681,7 @@ async function loadProjectOverview(options) {
   try {
     const response = await callGAS('getProjectList', {
       filters: {},
-      groupKey: activeGroup,
+      groupKey: CURRENT_USER.groupKey,
       archiveScope: showArchivedProjects ? 'archived' : 'active'
     });
 
@@ -835,7 +835,7 @@ function renderProgressTable() {
 
 async function toggleProjectArchive(projectId, projectName, archive) {
   try {
-    const response = await callGAS('setProjectArchived', { projectId, archived: archive, groupKey: activeGroup });
+    const response = await callGAS('setProjectArchived', { projectId, archived: archive, groupKey: CURRENT_USER.groupKey });
     if (response.status !== 'success') throw new Error(response.message);
     showToast(response.message || 'Đã cập nhật.', 'success');
     loadProjectOverview({ quiet: true });
@@ -880,7 +880,7 @@ function deleteProjectAction(projectId, projectName) {
     });
 
     try {
-      const response = await callGAS('deleteProject', { projectId, groupKey: activeGroup });
+      const response = await callGAS('deleteProject', { projectId, groupKey: CURRENT_USER.groupKey });
 
       if (response.status === 'success') {
         Swal.fire('Đã xóa!', response.message || '', 'success');
@@ -925,7 +925,7 @@ async function handleProjectCreationOrUpdate() {
         owner: CURRENT_USER.email || 'Unknown',
         status: status || 'Planning',
         description: note,
-        groupKey: activeGroup
+        groupKey: CURRENT_USER.groupKey
       });
 
       if (response.status === 'success') {
@@ -942,7 +942,7 @@ async function handleProjectCreationOrUpdate() {
         projectId: selectedProjectId,
         status,
         description: note,
-        groupKey: activeGroup
+        groupKey: CURRENT_USER.groupKey
       });
 
       if (response.status === 'success') {
@@ -984,7 +984,7 @@ function shareProjectAction(projectId, projectName) {
     });
 
     try {
-      const response = await callGAS('shareProject', { projectId, groupKey: activeGroup });
+      const response = await callGAS('shareProject', { projectId, groupKey: CURRENT_USER.groupKey });
 
       if (response.status === 'success') {
         Swal.fire('Thành công!', response.message || '', 'success');
@@ -1021,7 +1021,7 @@ async function loadTasksForProject(projectId, options) {
   if (!quiet && tableBody) tableBody.innerHTML = skeletonTableRows(7, 6);
 
   try {
-    const response = await callGAS('getTaskList', { projectId, groupKey: activeGroup });
+    const response = await callGAS('getTaskList', { projectId, groupKey: CURRENT_USER.groupKey });
 
     if (response.status === 'success') {
       globalAllTasks = response.data || [];
@@ -1197,7 +1197,7 @@ async function handleTaskFormSubmit(e) {
   submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu...';
 
   try {
-    const response = await callGAS('saveTask', { ...taskData, groupKey: activeGroup });
+    const response = await callGAS('saveTask', { ...taskData, groupKey: CURRENT_USER.groupKey });
 
     if (response.status === 'success') {
       showToast(response.message || 'Đã lưu công việc.', 'success');
@@ -1238,7 +1238,7 @@ function deleteTaskAction(taskId, taskName) {
     });
 
     try {
-      const response = await callGAS('deleteTask', { taskId, projectId: currentTaskProjectID, groupKey: activeGroup });
+      const response = await callGAS('deleteTask', { taskId, projectId: currentTaskProjectID, groupKey: CURRENT_USER.groupKey });
 
       if (response.status === 'success') {
         Swal.fire({
@@ -1272,7 +1272,7 @@ async function loadMemberCheckboxes() {
   container.innerHTML = '<div style="padding:8px; color: var(--text-muted); font-size:12.5px;">Đang tải...</div>';
 
   try {
-    const response = await callGAS('getAllUsers', { groupKey: activeGroup });
+    const response = await callGAS('getAllUsers', { groupKey: CURRENT_USER.groupKey });
 
     if (response.status === 'success') {
       const users = response.data || [];
@@ -1309,7 +1309,7 @@ async function loadAssigneeDropdown() {
   if (!assigneeSelect) return;
 
   try {
-    const response = await callGAS('getAllUsers', { groupKey: activeGroup });
+    const response = await callGAS('getAllUsers', { groupKey: CURRENT_USER.groupKey });
 
     if (response.status === 'success') {
       const members = response.data || [];
@@ -1409,7 +1409,7 @@ async function loadCalendarData(options) {
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
       calendarType: currentCalendarType,
-      groupKey: activeGroup,
+      groupKey: CURRENT_USER.groupKey,
       email: CURRENT_USER.email || null
     });
 
@@ -1614,7 +1614,7 @@ async function loadEventAttendeeCheckboxes() {
   container.innerHTML = '<div style="padding:8px; color: var(--text-muted); font-size:12.5px;">Đang tải...</div>';
 
   try {
-    const response = await callGAS('getAllUsers', { groupKey: activeGroup });
+    const response = await callGAS('getAllUsers', { groupKey: CURRENT_USER.groupKey });
     if (response.status === 'success') {
       const users = response.data || [];
       container.innerHTML = '';
@@ -1714,7 +1714,7 @@ window.quickDeleteEvent = function (id, title, e) {
       const response = await callGAS('deleteEvent', {
         eventId: id,
         calendarType: currentCalendarType,
-        groupKey: activeGroup,
+        groupKey: CURRENT_USER.groupKey,
         email: CURRENT_USER.email || null
       });
 
@@ -1777,7 +1777,7 @@ async function handleEventFormSubmit(e) {
       ...eventData,
       eventId: editingId,
       calendarType: currentCalendarType,
-      groupKey: activeGroup,
+      groupKey: CURRENT_USER.groupKey,
       email: CURRENT_USER.email || null
     });
 
@@ -1818,7 +1818,7 @@ async function handleManageEventClick() {
       eventId: selectedEventId,
       isImportant: newImportant,
       calendarType: currentCalendarType,
-      groupKey: activeGroup,
+      groupKey: CURRENT_USER.groupKey,
       email: CURRENT_USER.email || null
     });
 
