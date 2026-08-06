@@ -52,57 +52,226 @@ const STAGES_META = {
 const STAGE_KEYS = ['s1', 's2', 's3', 's4', 's5', 's6'];
 let currentStageIndex = 0;
 
-const ALLOWED_GROUPS = ['science', 'admin', 'all'];
+const ALLOWED_GROUPS = ['workhub-sci', 'admin', 'all'];
 
-async function checkAccessGuard() {
-  const userEmail = localStorage.getItem('userEmail') || localStorage.getItem('currentUser') || '';
-  let userGroup = localStorage.getItem('userGroup');
+let CURRENT_USER = {
+  email: '',
+  nickname: '',
+  groupKey: ''
+};
 
-  if (window.supabaseClient && userEmail) {
-    try {
-      const { data } = await window.supabaseClient
-        .from('users')
-        .select('group_key, nickname, email')
-        .eq('email', userEmail)
-        .maybeSingle();
+const auth = sbClient ? sbClient.auth : null;
 
-      if (data) {
-        userGroup = data.group_key;
-        localStorage.setItem('userGroup', userGroup);
-        if (data.nickname) {
-          const nameEl = document.getElementById('user-display-name');
-          if (nameEl) nameEl.textContent = data.nickname;
+// ==========================================
+// AUTHENTICATION & ACCESS GUARD (real Supabase Auth)
+// ==========================================
+
+function lockApp() {
+  document.body.classList.add('app-locked');
+  openAuthModal(true);
+}
+
+function unlockApp() {
+  document.body.classList.remove('app-locked');
+  closeAuthModal(true);
+}
+
+function getInitials(text) {
+  if (!text) return 'SC';
+  const clean = text.trim();
+  if (clean.includes('@')) {
+    return clean.split('@')[0].slice(0, 2).toUpperCase();
+  }
+  const parts = clean.split(' ').filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return clean.slice(0, 2).toUpperCase();
+}
+
+function updateUserProfileUI() {
+  const avatarText = document.getElementById('user-avatar-text');
+  const nameEl = document.getElementById('user-display-name');
+  const dropAvatar = document.getElementById('dropdown-avatar-text');
+  const dropName = document.getElementById('dropdown-name');
+  const dropEmail = document.getElementById('dropdown-email');
+
+  const initials = getInitials(CURRENT_USER.nickname || CURRENT_USER.email);
+
+  if (avatarText) avatarText.textContent = initials;
+  if (nameEl) nameEl.textContent = CURRENT_USER.nickname || CURRENT_USER.email;
+  if (dropAvatar) dropAvatar.textContent = initials;
+  if (dropName) dropName.textContent = CURRENT_USER.nickname || 'Science Member';
+  if (dropEmail) dropEmail.textContent = CURRENT_USER.email;
+}
+
+function toggleUserDropdown(e) {
+  if (e) e.stopPropagation();
+  const wrapper = document.getElementById('user-profile-wrapper');
+  const menu = document.getElementById('user-dropdown-menu');
+  if (wrapper && menu) {
+    wrapper.classList.toggle('open');
+    menu.classList.toggle('open');
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const wrapper = document.getElementById('user-profile-wrapper');
+  const menu = document.getElementById('user-dropdown-menu');
+  if (wrapper && menu && !wrapper.contains(e.target)) {
+    wrapper.classList.remove('open');
+    menu.classList.remove('open');
+  }
+});
+
+async function resolveUserProfile(user) {
+  CURRENT_USER.email = user.email;
+
+  try {
+    const info = await API.auth.getUserInfo(user.email);
+    CURRENT_USER.nickname = (info && info.name) || user.user_metadata?.display_name || user.email.split('@')[0];
+    CURRENT_USER.groupKey = (info && info.group) || 'guest';
+  } catch (err) {
+    console.warn("Lỗi lấy thông tin user:", err);
+    CURRENT_USER.nickname = user.email.split('@')[0];
+    CURRENT_USER.groupKey = 'guest';
+  }
+
+  if (!ALLOWED_GROUPS.includes(CURRENT_USER.groupKey)) {
+    document.body.classList.add('app-locked');
+    closeAuthModal(true);
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        icon: 'error',
+        title: 'Truy cập bị từ chối',
+        text: `Tài khoản ${CURRENT_USER.email} thuộc nhóm [${CURRENT_USER.groupKey}], không có quyền truy cập Science Pipeline.`,
+        showCancelButton: true,
+        confirmButtonText: 'Đổi tài khoản',
+        cancelButtonText: 'Về trang chủ',
+        confirmButtonColor: '#2F6AE0',
+        allowOutsideClick: false
+      }).then((res) => {
+        if (res.isConfirmed) {
+          auth.signOut().then(() => openAuthModal(true));
+        } else {
+          window.location.href = 'https://workhub-ai.pages.dev/';
         }
-      }
-    } catch (err) {
-      console.warn("Supabase shared auth query error, fallback to session:", err);
+      });
     }
-  }
-
-  if (!userGroup) {
-    userGroup = 'science';
-    localStorage.setItem('userGroup', 'science');
-  }
-
-  if (!ALLOWED_GROUPS.includes(userGroup.toLowerCase())) {
-    Swal.fire({
-      icon: 'error',
-      title: 'Truy cập bị từ chối',
-      text: `Bạn thuộc nhóm [${userGroup}], không có quyền truy cập Science Pipeline.`,
-      confirmButtonText: 'Quay về trang chủ',
-      confirmButtonColor: '#2F6AE0',
-      allowOutsideClick: false
-    }).then(() => {
-      window.location.href = 'https://workhub-ai.pages.dev/';
-    });
     return false;
   }
 
-  const avatarText = document.getElementById('user-avatar-text');
-  if (avatarText && userEmail) {
-    avatarText.textContent = userEmail.slice(0, 2).toUpperCase();
+  unlockApp();
+  updateUserProfileUI();
+
+  if (!window.__sciSessionBootstrapped) {
+    window.__sciSessionBootstrapped = true;
+    fetchLiveObservationLogs();
   }
+
   return true;
+}
+
+async function initAuth() {
+  if (!auth) {
+    console.error('Supabase auth chưa sẵn sàng — kiểm tra api.js.');
+    return;
+  }
+
+  auth.onAuthStateChange(async (event, session) => {
+    const user = session?.user;
+    if (user) {
+      await resolveUserProfile(user);
+      if (event === 'SIGNED_IN') {
+        logPipelineEvent(`Đã đăng nhập tài khoản: ${user.email}`, 'success', 'USER_LOGIN');
+      }
+    } else {
+      CURRENT_USER = { email: '', nickname: '', groupKey: '' };
+      lockApp();
+    }
+  });
+}
+
+function openAuthModal(forced) {
+  const modal = document.getElementById('auth-modal');
+  if (modal) {
+    modal.classList.add('open');
+    const cancelBtn = document.getElementById('auth-cancel-btn');
+    const closeBtn = document.getElementById('auth-modal-close-btn');
+    if (cancelBtn) cancelBtn.style.display = forced ? 'none' : '';
+    if (closeBtn) closeBtn.style.display = forced ? 'none' : '';
+    const emailInput = document.getElementById('auth-email-input');
+    if (emailInput) emailInput.value = CURRENT_USER.email || '';
+    const errBox = document.getElementById('auth-error-msg');
+    if (errBox) errBox.style.display = 'none';
+  }
+}
+
+function closeAuthModal(force) {
+  if (document.body.classList.contains('app-locked') && !force) return;
+  const modal = document.getElementById('auth-modal');
+  if (modal) modal.classList.remove('open');
+}
+
+async function handleAuthSubmit(e) {
+  e.preventDefault();
+  const email = (document.getElementById('auth-email-input')?.value || '').trim().toLowerCase();
+  const password = document.getElementById('auth-password-input')?.value || '';
+  const errBox = document.getElementById('auth-error-msg');
+  const submitBtn = document.getElementById('auth-submit-btn');
+
+  if (!email || !password) {
+    if (errBox) { errBox.textContent = 'Vui lòng nhập đầy đủ email và mật khẩu.'; errBox.style.display = 'block'; }
+    return;
+  }
+
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang xác thực...'; }
+  if (errBox) errBox.style.display = 'none';
+
+  try {
+    const realEmail = (await API.auth.getRealEmail(email)) || email;
+    const { error } = await auth.signInWithPassword({ email: realEmail, password });
+    if (error) throw error;
+    // auth.onAuthStateChange picks up the SIGNED_IN event and finishes the flow
+  } catch (err) {
+    let msg = err.message || 'Đăng nhập thất bại.';
+    if (msg.includes('Invalid login credentials')) msg = 'Sai email hoặc mật khẩu.';
+    if (errBox) { errBox.textContent = msg; errBox.style.display = 'block'; }
+  } finally {
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> Đăng nhập'; }
+  }
+}
+
+async function switchAccount() {
+  if (auth) await auth.signOut();
+  openAuthModal(true);
+}
+
+async function handleLogout() {
+  if (auth) await auth.signOut();
+  // auth.onAuthStateChange fires SIGNED_OUT -> clears CURRENT_USER and locks the app
+  if (typeof Swal !== 'undefined') {
+    Swal.fire({
+      icon: 'info',
+      title: 'Đã đăng xuất',
+      text: 'Vui lòng đăng nhập lại với tài khoản nhóm Science.',
+      confirmButtonText: 'OK',
+      confirmButtonColor: '#2F6AE0'
+    });
+  }
+}
+
+async function refreshScienceSession() {
+  if (!auth) return;
+  const { data: { user } } = await auth.getUser();
+  if (user) await resolveUserProfile(user);
+  if (typeof Swal !== 'undefined') {
+    Swal.fire({
+      icon: 'success',
+      title: 'Đã làm mới phiên',
+      text: `Tài khoản ${CURRENT_USER.email} (Quyền: ${CURRENT_USER.groupKey})`,
+      timer: 1500,
+      showConfirmButton: false
+    });
+  }
 }
 
 function switchStage(stageKey) {
@@ -155,9 +324,9 @@ let LOCAL_LOGS = [];
 
 async function fetchLiveObservationLogs() {
   const email = localStorage.getItem('userEmail') || localStorage.getItem('currentUser') || '';
-  if (window.API && window.API.notification) {
+  if (API && API.notification) {
     try {
-      const logs = await window.API.notification.get('science', 25, email);
+      const logs = await API.notification.get('workhub-sci', 25, email);
       if (logs && logs.length > 0) {
         LOCAL_LOGS = logs.map(l => ({
           time: new Date(l.timestamp).toTimeString().slice(0, 8),
@@ -206,9 +375,9 @@ async function logPipelineEvent(text, type = 'info', action = 'PIPELINE_SCI_ACTI
 
   const userEmail = localStorage.getItem('userEmail') || localStorage.getItem('currentUser') || '';
   const traceId = "TRC_SCI_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
-  if (window.API && window.API.system && window.API.system.logAction) {
+  if (API && API.system && API.system.logAction) {
     try {
-      await window.API.system.logAction(traceId, action, text, type === 'danger' ? 'error' : 'success', userEmail, 'science', null);
+      await API.system.logAction(traceId, action, text, type === 'danger' ? 'error' : 'success', userEmail, 'workhub-sci', null);
     } catch (err) {
       console.warn("Không thể ghi log lên Supabase system_logs:", err);
     }
@@ -245,12 +414,10 @@ function setupThemeToggle() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   setupThemeToggle();
-  const hasAccess = await checkAccessGuard();
-  if (!hasAccess) return;
-
   renderObservationLogs();
   updateStageUI('s1');
-  await fetchLiveObservationLogs();
+
+  await initAuth();
 
   const notiBtn = document.getElementById('observation-toggle-btn');
   if (notiBtn) notiBtn.addEventListener('click', toggleObservationDrawer);

@@ -17,7 +17,7 @@
 
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="app-locked">
 
   <header id="app-header">
     <div class="brand-section">
@@ -29,11 +29,6 @@
     </div>
 
     <div class="header-actions">
-      <a href="https://workhub-ai.pages.dev/" class="header-btn" title="Về trang chủ" style="width: auto; padding: 0 14px; font-size: 13px; font-weight: 600; gap: 6px; color: var(--cyan-accent); border-color: rgba(0,210,255,0.3);">
-        <i class="fa-solid fa-house"></i>
-        <span>Trang chủ</span>
-      </a>
-
       <button class="header-btn" id="theme-toggle-btn" title="Dark/Light Mode">
         <i class="fa-solid fa-moon"></i>
       </button>
@@ -43,9 +38,27 @@
         <span class="noti-badge" id="noti-unread-indicator"></span>
       </button>
 
-      <div class="user-profile-badge" id="user-badge">
-        <div class="user-avatar" id="user-avatar-text">SC</div>
-        <span id="user-display-name">Science Specialist</span>
+      <div class="user-profile-wrapper" id="user-profile-wrapper">
+        <div class="user-profile-badge" id="user-badge" title="Tài khoản cá nhân" onclick="toggleUserDropdown(event)">
+          <div class="user-avatar" id="user-avatar-text">SC</div>
+          <span id="user-display-name">Science Specialist</span>
+          <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+        </div>
+
+        <div class="user-dropdown-menu" id="user-dropdown-menu">
+          <div class="dropdown-user-info">
+            <div class="dropdown-avatar" id="dropdown-avatar-text">SC</div>
+            <div class="dropdown-text">
+              <strong id="dropdown-name">User</strong>
+              <small id="dropdown-email">user@workhub.vn</small>
+            </div>
+          </div>
+          <div class="dropdown-divider"></div>
+          <button class="dropdown-item" onclick="switchAccount()"><i class="fa-solid fa-user-gear"></i> Đổi tài khoản</button>
+          <button class="dropdown-item" onclick="refreshScienceSession()"><i class="fa-solid fa-rotate"></i> Làm mới quyền truy cập</button>
+          <div class="dropdown-divider"></div>
+          <button class="dropdown-item item-danger" onclick="handleLogout()"><i class="fa-solid fa-right-from-bracket"></i> Đăng xuất</button>
+        </div>
       </div>
     </div>
   </header>
@@ -161,6 +174,40 @@
 
     </div>
   </aside>
+
+  <!-- Auth / Login Modal -->
+  <div class="modal-overlay" id="auth-modal">
+    <div class="modal-card auth-modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-shield-halved" style="color: var(--cyan-accent);"></i> Đăng nhập WorkHub Science</h3>
+        <button class="header-btn" id="auth-modal-close-btn" onclick="closeAuthModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-secondary); font-size: 13.5px; margin-bottom: 18px;">
+          Đăng nhập bằng tài khoản WorkHub của bạn để truy cập Science Pipeline.
+        </p>
+
+        <form id="auth-form" onsubmit="handleAuthSubmit(event)">
+          <div class="form-group">
+            <label class="form-label" for="auth-email-input">Email tài khoản WorkHub:</label>
+            <input type="email" id="auth-email-input" class="form-control" placeholder="vidu: specialist@gmail.com" required autocomplete="username">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="auth-password-input">Mật khẩu:</label>
+            <input type="password" id="auth-password-input" class="form-control" placeholder="Mật khẩu WorkHub" required autocomplete="current-password">
+          </div>
+
+          <div id="auth-error-msg" class="auth-error-message" style="display:none; color: var(--danger-color); font-size: 13px; margin-top: 6px;"></div>
+
+          <div class="modal-footer" style="padding: 16px 0 0 0; margin-top: 20px; background: transparent; border-top: 1px solid var(--border-color);">
+            <button type="button" class="btn btn-secondary" id="auth-cancel-btn" onclick="closeAuthModal()">Hủy</button>
+            <button type="submit" class="btn btn-primary" id="auth-submit-btn"><i class="fa-solid fa-right-to-bracket"></i> Đăng nhập</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 
   <script src="api.js"></script>
   <script src="script.js"></script>
