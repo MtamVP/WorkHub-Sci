@@ -16,7 +16,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body class="app-locked">
 
@@ -32,6 +32,14 @@
     <div class="header-actions">
       <button class="header-btn" id="theme-toggle-btn" title="Dark/Light Mode">
         <i class="fa-solid fa-moon"></i>
+      </button>
+
+      <button class="header-btn" id="open-search-btn" onclick="openSearchPalette()" title="Tìm kiếm (Ctrl+K)">
+        <i class="fa-solid fa-magnifying-glass"></i>
+      </button>
+
+      <button class="header-btn" id="open-trash-btn" onclick="showTrashModal()" title="Thùng rác">
+        <i class="fa-solid fa-trash-can"></i>
       </button>
 
       <button class="header-btn" id="observation-toggle-btn" title="Observatory">
@@ -752,6 +760,10 @@
           <input type="hidden" id="task-id">
           <input type="hidden" id="new-task-parent-id">
 
+          <div id="subtask-of-label" class="subtask-of-label" style="display:none;">
+            <i class="fa-solid fa-diagram-project"></i> Việc con của: <span id="subtask-of-name"></span>
+          </div>
+
           <div class="form-group">
             <label class="form-label">Tên công việc</label>
             <input type="text" id="new-task-name" class="form-control" placeholder="Ví dụ: Chuẩn hóa metadata bộ dữ liệu Q3" required>
@@ -806,11 +818,84 @@
             <label class="form-label" for="new-task-labels">Nhãn</label>
             <input type="text" id="new-task-labels" class="form-control" placeholder="Ngăn cách bằng dấu phẩy. Ví dụ: gấp, đối soát">
           </div>
+
+          <div class="form-group">
+            <label class="form-label">Bị chặn bởi (phụ thuộc)</label>
+            <div class="multiselect-container">
+              <div class="selectBox" onclick="showBlockerCheckboxes()">
+                <select class="form-select"><option>-- Chọn công việc chặn --</option></select>
+                <div class="overSelect"></div>
+              </div>
+              <div id="blocker-checkboxes">
+                <div class="p-2" style="padding:8px; color: var(--text-muted); font-size: 12.5px;">Đang tải...</div>
+              </div>
+            </div>
+          </div>
         </form>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="closeAppModal('add-task-modal')">Hủy</button>
         <button type="submit" form="task-form" class="btn btn-primary">Lưu Công Việc</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task Activity Modal (Bình luận / Danh sách kiểm / Đính kèm / Lịch sử) -->
+  <div class="modal-overlay" id="task-activity-modal">
+    <div class="modal-card" style="max-width: 560px;">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-comment-dots" style="color: var(--cyan-accent);"></i> <span id="task-activity-name"></span></h3>
+        <button class="header-btn" onclick="closeAppModal('task-activity-modal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="task-activity-tabs">
+          <button type="button" class="task-activity-tab active" data-tab="comments" onclick="switchTaskActivityTab('comments')">Bình luận</button>
+          <button type="button" class="task-activity-tab" data-tab="checklist" onclick="switchTaskActivityTab('checklist')">Danh sách kiểm</button>
+          <button type="button" class="task-activity-tab" data-tab="attachments" onclick="switchTaskActivityTab('attachments')">Đính kèm</button>
+          <button type="button" class="task-activity-tab" data-tab="history" onclick="switchTaskActivityTab('history')">Lịch sử</button>
+        </div>
+
+        <div id="task-activity-comments-panel" class="task-activity-panel">
+          <div id="task-comment-list" class="task-comment-list"><div style="padding:8px; color: var(--text-muted); font-size: 12.5px;">Đang tải...</div></div>
+          <form id="task-comment-form" onsubmit="handleTaskCommentSubmit(event)">
+            <div class="multiselect-container" style="margin-bottom: 8px;">
+              <div class="selectBox" onclick="showMentionCheckboxes()">
+                <select class="form-select"><option>-- Gắn thẻ thành viên (tùy chọn) --</option></select>
+                <div class="overSelect"></div>
+              </div>
+              <div id="comment-mention-checkboxes">
+                <div class="p-2" style="padding:8px; color: var(--text-muted); font-size: 12.5px;">Đang tải...</div>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <input type="text" id="task-comment-input" class="form-control" placeholder="Viết bình luận...">
+              <button type="submit" class="btn btn-primary">Gửi</button>
+            </div>
+          </form>
+        </div>
+
+        <div id="task-activity-checklist-panel" class="task-activity-panel" style="display:none;">
+          <div id="task-checklist-list" class="task-checklist-list"><div style="padding:8px; color: var(--text-muted); font-size: 12.5px;">Đang tải...</div></div>
+          <form id="task-checklist-form" style="display:flex; gap:8px;" onsubmit="handleTaskChecklistSubmit(event)">
+            <input type="text" id="task-checklist-input" class="form-control" placeholder="Thêm mục cần kiểm...">
+            <button type="submit" class="btn btn-primary">Thêm</button>
+          </form>
+        </div>
+
+        <div id="task-activity-attachments-panel" class="task-activity-panel" style="display:none;">
+          <div id="task-attachment-list" class="task-attachment-list"><div style="padding:8px; color: var(--text-muted); font-size: 12.5px;">Đang tải...</div></div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="file" id="task-attachment-input" class="form-control" style="padding:6px 10px;">
+            <button type="button" class="btn btn-primary" id="task-attachment-upload-btn" onclick="handleTaskAttachmentUpload()">Tải lên</button>
+          </div>
+        </div>
+
+        <div id="task-activity-history-panel" class="task-activity-panel" style="display:none;">
+          <div id="task-history-list" class="task-history-list"><div style="padding:8px; color: var(--text-muted); font-size: 12.5px;">Đang tải...</div></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeAppModal('task-activity-modal')">Đóng</button>
       </div>
     </div>
   </div>
@@ -932,7 +1017,60 @@
     </div>
   </div>
 
+  <!-- Trash Modal -->
+  <div class="modal-overlay" id="trash-modal">
+    <div class="modal-card" style="max-width: 640px;">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-trash-can" style="color: var(--danger-color);"></i> Thùng rác</h3>
+        <button class="header-btn" onclick="closeAppModal('trash-modal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:8px;">
+          <select id="trash-category" class="form-select" style="max-width: 220px;" onchange="loadTrashItems()">
+            <option value="files">Tệp tin (Files)</option>
+            <option value="projects">Dự án (Projects)</option>
+            <option value="events">Sự kiện (Events)</option>
+            <option value="tasks">Công việc (Tasks)</option>
+          </select>
+          <button type="button" class="btn btn-secondary" onclick="loadTrashItems()"><i class="fa-solid fa-rotate-right"></i> Làm mới</button>
+        </div>
+        <div class="table-container" style="max-height: 360px; overflow-y: auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Tên/Tiêu đề</th>
+                <th style="width: 30%;">Ngày xóa</th>
+                <th style="width: 20%;" class="text-center">Hành động</th>
+              </tr>
+            </thead>
+            <tbody id="trash-list-body">
+              <tr><td colspan="3" class="empty-state">Đang tải...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeAppModal('trash-modal')">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Search Palette (Ctrl/Cmd + K) -->
+  <div id="search-palette" class="search-palette" style="display:none;">
+    <div class="search-palette-box">
+      <div class="search-palette-input-row">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="search-palette-input" autocomplete="off" spellcheck="false"
+          placeholder="Tìm dự án, công việc, tệp..." oninput="onSearchPaletteInput(this.value)" onkeydown="handleSearchPaletteKeydown(event)">
+        <kbd class="search-palette-esc">Esc</kbd>
+      </div>
+      <div id="search-palette-results" class="search-palette-results">
+        <div class="search-palette-hint">Gõ ít nhất 2 ký tự để tìm.</div>
+      </div>
+    </div>
+  </div>
+
   <script src="api.js?v=6"></script>
-  <script src="script.js?v=10"></script>
+  <script src="script.js?v=11"></script>
 </body>
 </html>
