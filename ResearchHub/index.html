@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="vi">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description"
+    content="Không gian làm việc chung cho nhóm khoa học: chủ đề nghiên cứu, bằng chứng, quyết định và quy trình ở một nơi." />
+  <meta name="robots" content="noindex" />
+  <title>Research Intelligence Hub</title>
+  <link rel="icon"
+    href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='14'%20fill='%23103049'/%3E%3Ctext%20x='32'%20y='43'%20font-size='27'%20font-family='Arial'%20font-weight='bold'%20fill='%23ffffff'%20text-anchor='middle'%3ERI%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Điều hướng chính">
+      <div class="brand">
+        <div class="brand-mark">RI</div>
+        <div>
+          <p>Research</p>
+          <strong>Intelligence Hub</strong>
+        </div>
+      </div>
+
+      <nav class="nav-list">
+        <button class="nav-item active" data-view="overview"><span>01</span>Tổng quan</button>
+        <button class="nav-item" data-view="topics"><span>02</span>Chủ đề</button>
+        <button class="nav-item" data-view="pipeline"><span>03</span>Quy trình</button>
+        <button class="nav-item" data-view="papers"><span>04</span>Tài liệu</button>
+        <button class="nav-item" data-view="decisions"><span>05</span>Quyết định</button>
+        <button class="nav-item" data-view="graph"><span>06</span>Sơ đồ</button>
+        <button class="nav-item" data-view="synthesis"><span>07</span>Tổng hợp</button>
+        <a class="nav-item" href="../index.html">← Dashboard</a>
+      </nav>
+
+      <div class="sidebar-panel">
+        <span class="panel-label">Sức khoẻ danh mục</span>
+        <div class="meter"><span id="healthMeter"></span></div>
+        <small id="healthText">Chưa có chủ đề nào được chấm điểm</small>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Danh mục chủ đề khoa học</p>
+          <h1>Research Intelligence Hub</h1>
+          <p class="lead">Thu thập chủ đề nghiên cứu, đánh giá bằng chứng, theo dõi quyết định và đưa ý tưởng qua từng
+            bước rà soát.</p>
+        </div>
+        <div class="top-actions">
+          <button class="ghost-button" id="importButton">Nhập dữ liệu</button>
+          <button class="ghost-button" id="exportJsonButton">Xuất JSON</button>
+          <button class="ghost-button" id="exportCsvButton">Xuất CSV</button>
+          <button class="ghost-button" id="exportBriefButton">Xuất bản tóm tắt</button>
+          <button class="primary-button" id="addTopicButton">Thêm chủ đề</button>
+          <input id="importFile" type="file" accept=".json,.bib,.ris,application/json,text/plain" hidden />
+        </div>
+      </header>
+
+      <section class="status-strip">
+        <div class="connection-status" id="statusText"><span></span>Đang kết nối tới không gian làm việc chung...</div>
+        <div class="status-actions">
+          <button class="ghost-button" id="backupsButton">Sao lưu</button>
+          <button class="ghost-button danger-ghost" id="clearDataButton">Xoá dữ liệu</button>
+        </div>
+      </section>
+
+      <section class="metrics-grid" aria-label="Chỉ số nghiên cứu">
+        <article class="metric-card"><span>Tổng số chủ đề</span><strong id="metricTopics">0</strong><small>Các chủ đề
+            nghiên cứu đang theo dõi</small></article>
+        <article class="metric-card"><span>Ưu tiên cao</span><strong id="metricPriority">0</strong><small>Mức nghiêm
+            trọng hoặc cao</small></article>
+        <article class="metric-card"><span>Mục bằng chứng</span><strong id="metricPapers">0</strong><small>Tài liệu, bộ
+            dữ liệu, nguồn</small></article>
+        <article class="metric-card"><span>Hành động đang mở</span><strong id="metricActions">0</strong><small>Việc cần
+            làm còn tồn đọng</small></article>
+        <article class="metric-card"><span>Điểm trung bình</span><strong id="metricScore">0</strong><small>Tính mới, khả
+            thi, bằng chứng</small></article>
+      </section>
+
+      <section class="workspace">
+        <div class="workspace-header">
+          <div>
+            <p class="eyebrow" id="viewEyebrow">Tổng quan</p>
+            <h2 id="viewTitle">Tổng quan danh mục</h2>
+            <p class="view-subtitle" id="viewSubtitle">So sánh các chủ đề nghiên cứu theo mức ưu tiên, tác động, bằng
+              chứng, người phụ trách và mức độ sẵn sàng.</p>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <div class="search-field">
+            <span>Tìm kiếm</span>
+            <input id="searchInput" type="search"
+              placeholder="Chủ đề, thẻ, người phụ trách, nguồn, quyết định, DOI, hành động" />
+          </div>
+          <select id="priorityFilter" aria-label="Lọc theo mức ưu tiên">
+            <option value="all">Tất cả mức ưu tiên</option>
+            <option value="Critical">Nghiêm trọng</option>
+            <option value="High">Cao</option>
+            <option value="Medium">Trung bình</option>
+            <option value="Low">Thấp</option>
+          </select>
+          <select id="statusFilter" aria-label="Lọc theo giai đoạn">
+            <option value="all">Tất cả giai đoạn</option>
+            <option value="Needs Triage">Cần phân loại</option>
+            <option value="Scoping">Xác định phạm vi</option>
+            <option value="Literature Review">Tổng quan tài liệu</option>
+            <option value="Experiment Design">Thiết kế thí nghiệm</option>
+            <option value="Active">Đang triển khai</option>
+            <option value="Writing">Đang viết bài</option>
+            <option value="Published">Đã công bố</option>
+            <option value="Archived">Lưu trữ</option>
+          </select>
+          <select id="evidenceFilter" aria-label="Lọc theo chất lượng bằng chứng">
+            <option value="all">Tất cả bằng chứng</option>
+            <option value="gap">Khoảng trống bằng chứng</option>
+            <option value="strong">Bằng chứng mạnh</option>
+            <option value="noDecision">Chưa có quyết định</option>
+            <option value="overdue">Hành động quá hạn</option>
+            <option value="duplicateRisk">Nghi trùng lặp</option>
+          </select>
+          <select id="sortSelect" aria-label="Sắp xếp bảng">
+            <option value="scoreDesc">Sắp xếp: điểm cao-thấp</option>
+            <option value="priorityDesc">Sắp xếp: ưu tiên</option>
+            <option value="updatedDesc">Sắp xếp: cập nhật gần đây</option>
+            <option value="evidenceAsc">Sắp xếp: khoảng trống bằng chứng</option>
+            <option value="titleAsc">Sắp xếp: tiêu đề A-Z</option>
+          </select>
+        </div>
+
+        <div class="auxiliary-view" id="auxiliaryView"></div>
+
+        <section class="data-table" aria-label="Dữ liệu nghiên cứu">
+          <div class="table-head" id="tableHead"></div>
+          <div id="tableRows"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <dialog class="topic-dialog" id="topicDialog">
+    <form id="topicForm">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow" id="dialogEyebrow">Soạn thảo chủ đề</p>
+          <h2 id="dialogTitle">Thêm chủ đề</h2>
+        </div>
+        <button class="icon-button" id="closeDialogButton" type="button" aria-label="Đóng">x</button>
+      </div>
+
+      <div class="form-grid">
+        <label>Tiêu đề<input name="title" required /></label>
+        <label>Người phụ trách<input name="owner" required /></label>
+        <label>Người đóng góp<input name="contributors" placeholder="Tên cách nhau bằng dấu phẩy" /></label>
+        <label>Trạng thái
+          <select name="status">
+            <option value="Needs Triage">Cần phân loại</option>
+            <option value="Scoping">Xác định phạm vi</option>
+            <option value="Literature Review">Tổng quan tài liệu</option>
+            <option value="Experiment Design">Thiết kế thí nghiệm</option>
+            <option value="Active">Đang triển khai</option>
+            <option value="Writing">Đang viết bài</option>
+            <option value="Published">Đã công bố</option>
+            <option value="Archived">Lưu trữ</option>
+          </select>
+        </label>
+        <label>Ưu tiên<select name="priority">
+            <option value="High">Cao</option>
+            <option value="Critical">Nghiêm trọng</option>
+            <option value="Medium">Trung bình</option>
+            <option value="Low">Thấp</option>
+          </select></label>
+        <label>Tác động<select name="impact">
+            <option value="Transformative">Đột phá</option>
+            <option value="High">Cao</option>
+            <option value="Medium">Trung bình</option>
+            <option value="Low">Thấp</option>
+          </select></label>
+        <label>Tính mới <input name="novelty" type="number" min="0" max="100" step="1" /></label>
+        <label>Tính khả thi <input name="feasibility" type="number" min="0" max="100" step="1" /></label>
+        <label>Độ mạnh bằng chứng <input name="evidence" type="number" min="0" max="100" step="1" /></label>
+        <label>Tiềm năng tài trợ <input name="funding" type="number" min="0" max="100" step="1" /></label>
+        <label>Mức cấp thiết <input name="urgency" type="number" min="0" max="100" step="1" /></label>
+        <label>Phù hợp với nhóm <input name="teamFit" type="number" min="0" max="100" step="1" /></label>
+        <label class="span-2">Câu hỏi nghiên cứu<input name="question" required /></label>
+        <label class="span-2">Lý do chấm điểm<textarea name="rationale"
+            placeholder="Vì sao các điểm số này hợp lý? Nêu rõ độ không chắc chắn, giả định và ghi chú của người rà soát."></textarea></label>
+        <label class="span-2">Khoảng trống tri thức<input name="gap"
+            placeholder="Điều gì chưa được biết hoặc chưa được giải quyết?" /></label>
+        <label class="span-2">Phương pháp đề xuất<textarea name="method"
+            placeholder="Thiết kế nghiên cứu, dữ liệu, thí nghiệm hoặc hướng phân tích dự kiến"></textarea></label>
+        <label class="span-2">Mô tả<textarea name="description" required></textarea></label>
+        <label class="span-2">Thẻ gắn nhãn<input name="tags" placeholder="AI, Sinh học, Chẩn đoán" /></label>
+        <div class="lookup-row span-2">
+          <label>Tra cứu DOI<input id="doiLookupInput" type="text" placeholder="10.xxxx/example-doi" /></label>
+          <button class="ghost-button" id="doiLookupButton" type="button">Thêm tài liệu từ DOI</button>
+        </div>
+        <div class="span-2 repeatable-section" id="papersSection">
+          <div class="repeatable-section-head">
+            <span>Tài liệu liên quan</span>
+            <button type="button" class="ghost-button" id="addPaperButton">+ Thêm tài liệu</button>
+          </div>
+          <div class="repeatable-list" id="papersList"></div>
+        </div>
+        <div class="span-2 repeatable-section" id="actionsSection">
+          <div class="repeatable-section-head">
+            <span>Hành động tiếp theo</span>
+            <button type="button" class="ghost-button" id="addActionButton">+ Thêm hành động</button>
+          </div>
+          <div class="repeatable-list" id="actionsList"></div>
+        </div>
+        <div class="span-2 repeatable-section" id="decisionsSection">
+          <div class="repeatable-section-head">
+            <span>Nhật ký quyết định</span>
+            <button type="button" class="ghost-button" id="addDecisionButton">+ Thêm quyết định</button>
+          </div>
+          <div class="repeatable-list" id="decisionsList"></div>
+        </div>
+      </div>
+
+      <div class="dialog-actions">
+        <button class="ghost-button" id="cancelDialogButton" type="button">Huỷ</button>
+        <button class="danger-button" id="deleteTopicButton" type="button">Xoá</button>
+        <button class="primary-button" type="submit">Lưu chủ đề</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="detail-dialog" id="detailDialog">
+    <div class="detail-content" id="detailContent"></div>
+  </dialog>
+
+  <dialog class="detail-dialog" id="backupsDialog">
+    <div class="detail-content" id="backupsContent"></div>
+  </dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>
