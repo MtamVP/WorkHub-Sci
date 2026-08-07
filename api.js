@@ -109,6 +109,85 @@ const API = {
         }
     },
 
+    presence: {
+        getScienceMembers: async () => {
+            if (!sbClient) return [];
+            try {
+                const { data: usersData, error: userErr } = await sbClient
+                    .from('users')
+                    .select('email, nickname, group_key, created_at')
+                    .in('group_key', ['science', 'admin', 'all', 'Science', 'Admin', 'All'])
+                    .order('created_at', { ascending: false });
+
+                if (userErr) console.warn("Lỗi lấy users:", userErr);
+
+                const { data: statusData, error: statusErr } = await sbClient
+                    .from('user_status')
+                    .select('*')
+                    .order('last_changed', { ascending: false });
+
+                if (statusErr) console.warn("Lỗi lấy user_status:", statusErr);
+
+                const statusMap = {};
+                (statusData || []).forEach(st => {
+                    if (st.email) statusMap[st.email.toLowerCase()] = st;
+                    if (st.uid) statusMap[st.uid.toLowerCase()] = st;
+                });
+
+                const memberMap = new Map();
+
+                (usersData || []).forEach(u => {
+                    const email = (u.email || '').toLowerCase();
+                    if (!email) return;
+                    const st = statusMap[email];
+                    memberMap.set(email, {
+                        email: u.email,
+                        nickname: u.nickname || (st ? st.display_name : '') || email.split('@')[0],
+                        group_key: u.group_key || 'science',
+                        last_changed: st ? st.last_changed : u.created_at,
+                        state: st ? st.state : 'offline',
+                        photo_url: st ? st.photo_url : null
+                    });
+                });
+
+                (statusData || []).forEach(st => {
+                    const email = (st.email || st.uid || '').toLowerCase();
+                    if (email && !memberMap.has(email) && (st.current_group === 'science' || !st.current_group)) {
+                        memberMap.set(email, {
+                            email: st.email || st.uid,
+                            nickname: st.display_name || email.split('@')[0],
+                            group_key: st.current_group || 'science',
+                            last_changed: st.last_changed,
+                            state: st.state || 'offline',
+                            photo_url: st.photo_url
+                        });
+                    }
+                });
+
+                const now = new Date().getTime();
+                const ONLINE_THRESHOLD = 3 * 60 * 1000;
+
+                const members = Array.from(memberMap.values()).map(m => {
+                    const lastSeenDate = m.last_changed ? new Date(m.last_changed) : new Date(0);
+                    const timeDiff = now - lastSeenDate.getTime();
+                    const isOnline = m.state === 'online' && timeDiff < ONLINE_THRESHOLD;
+                    return { ...m, isOnline, lastSeenDate, timeDiff };
+                });
+
+                members.sort((a, b) => {
+                    if (a.isOnline && !b.isOnline) return -1;
+                    if (!a.isOnline && b.isOnline) return 1;
+                    return b.lastSeenDate.getTime() - a.lastSeenDate.getTime();
+                });
+
+                return members;
+            } catch (err) {
+                console.error("Lỗi getScienceMembers:", err);
+                return [];
+            }
+        }
+    },
+
     user: {
         listAll: async () => {
             if (!sbClient) return [];

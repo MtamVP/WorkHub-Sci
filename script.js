@@ -87,6 +87,187 @@ function getInitials(text) {
   return clean.slice(0, 2).toUpperCase();
 }
 
+// -------------------- Members Drawer (Thành Viên) --------------------
+
+let SCIENCE_MEMBERS = [];
+let CURRENT_MEMBER_FILTER = 'all';
+
+function toggleMembersDrawer() {
+  const drawer = document.getElementById('members-drawer');
+  if (drawer) {
+    drawer.classList.toggle('open');
+    if (drawer.classList.contains('open')) loadScienceMembers();
+  }
+}
+
+function openMembersDrawer() {
+  const drawer = document.getElementById('members-drawer');
+  if (drawer) {
+    drawer.classList.add('open');
+    loadScienceMembers();
+  }
+}
+
+function closeMembersDrawer() {
+  const drawer = document.getElementById('members-drawer');
+  if (drawer) drawer.classList.remove('open');
+}
+
+async function loadScienceMembers(showToast = false) {
+  const container = document.getElementById('members-list-container');
+
+  try {
+    let members = [];
+    if (API && API.presence) {
+      members = await API.presence.getScienceMembers();
+    }
+
+    const currentMember = (members || []).find(m => m.email.toLowerCase() === CURRENT_USER.email.toLowerCase());
+    if (currentMember) {
+      currentMember.isOnline = true;
+      currentMember.last_changed = new Date().toISOString();
+    } else if (CURRENT_USER.email) {
+      members.unshift({
+        email: CURRENT_USER.email,
+        nickname: CURRENT_USER.nickname || CURRENT_USER.email.split('@')[0],
+        group_key: CURRENT_USER.groupKey || 'workhub-sci',
+        isOnline: true,
+        last_changed: new Date().toISOString()
+      });
+    }
+
+    SCIENCE_MEMBERS = members;
+    updateMemberCounts();
+    renderMembersList();
+
+    if (showToast && typeof Swal !== 'undefined') {
+      Swal.fire({
+        toast: true, position: 'top-end', icon: 'success',
+        title: 'Đã cập nhật danh sách thành viên', showConfirmButton: false, timer: 1500
+      });
+    }
+  } catch (err) {
+    console.error("Lỗi tải thành viên Science:", err);
+    if (container) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <i class="fa-solid fa-triangle-exclamation" style="color: var(--danger-color); font-size: 24px;"></i>
+          <span>Không thể tải danh sách thành viên. Vui lòng thử lại!</span>
+        </div>
+      `;
+    }
+  }
+}
+
+function updateMemberCounts() {
+  const total = SCIENCE_MEMBERS.length;
+  const online = SCIENCE_MEMBERS.filter(m => m.isOnline).length;
+  const offline = total - online;
+
+  const countAllEl = document.getElementById('count-all');
+  const countOnlineEl = document.getElementById('count-online');
+  const countOfflineEl = document.getElementById('count-offline');
+  const totalCountEl = document.getElementById('members-total-count');
+
+  if (countAllEl) countAllEl.textContent = total;
+  if (countOnlineEl) countOnlineEl.textContent = online;
+  if (countOfflineEl) countOfflineEl.textContent = offline;
+  if (totalCountEl) totalCountEl.textContent = total;
+}
+
+function timeAgoVietnamese(dateInput) {
+  if (!dateInput) return 'Chưa hoạt động';
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return 'Chưa hoạt động';
+
+  const diffMs = Date.now() - d.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  if (diffSec < 45) return 'Vừa mới đây';
+  if (diffMin < 60) return `Hoạt động ${diffMin} phút trước`;
+  if (diffHour < 24) return `Hoạt động ${diffHour} giờ trước`;
+  return `Hoạt động ${diffDay} ngày trước`;
+}
+
+function setMemberFilter(filter, btn) {
+  CURRENT_MEMBER_FILTER = filter;
+  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderMembersList();
+}
+
+function filterMembersList() {
+  const query = (document.getElementById('members-search-input')?.value || '').trim();
+  const clearBtn = document.getElementById('members-clear-search');
+  if (clearBtn) clearBtn.style.display = query ? 'block' : 'none';
+  renderMembersList();
+}
+
+function clearMembersSearch() {
+  const searchInput = document.getElementById('members-search-input');
+  if (searchInput) searchInput.value = '';
+  const clearBtn = document.getElementById('members-clear-search');
+  if (clearBtn) clearBtn.style.display = 'none';
+  renderMembersList();
+}
+
+function renderMembersList() {
+  const container = document.getElementById('members-list-container');
+  if (!container) return;
+
+  const searchQuery = (document.getElementById('members-search-input')?.value || '').trim().toLowerCase();
+
+  let filtered = SCIENCE_MEMBERS.filter(m => {
+    if (CURRENT_MEMBER_FILTER === 'online' && !m.isOnline) return false;
+    if (CURRENT_MEMBER_FILTER === 'offline' && m.isOnline) return false;
+    if (searchQuery) {
+      const matchEmail = (m.email || '').toLowerCase().includes(searchQuery);
+      const matchNick = (m.nickname || '').toLowerCase().includes(searchQuery);
+      if (!matchEmail && !matchNick) return false;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <i class="fa-solid fa-user-slash" style="font-size: 28px; opacity: 0.4;"></i>
+        <span>Không tìm thấy thành viên nào phù hợp</span>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filtered.map(member => {
+    const initials = getInitials(member.nickname || member.email);
+    const statusDotClass = member.isOnline ? 'online' : 'offline';
+    const statusText = member.isOnline ? 'Đang hoạt động' : timeAgoVietnamese(member.last_changed);
+    const statusClass = member.isOnline ? 'online' : 'offline';
+    const isMe = member.email.toLowerCase() === CURRENT_USER.email.toLowerCase();
+
+    return `
+      <div class="member-item-card" title="${member.email} (${member.group_key || 'workhub-sci'})">
+        <div class="member-avatar-box">
+          <div class="member-avatar-circle">${initials}</div>
+          <div class="status-dot-indicator ${statusDotClass}"></div>
+        </div>
+        <div class="member-content">
+          <div class="member-email-title">
+            <span>${member.email}</span>
+            ${isMe ? '<span class="member-badge-pill">Bạn</span>' : ''}
+          </div>
+          <div class="member-activity-status ${statusClass}">
+            <span>${statusText}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 function updateUserProfileUI() {
   const avatarText = document.getElementById('user-avatar-text');
   const nameEl = document.getElementById('user-display-name');
@@ -170,6 +351,7 @@ async function resolveUserProfile(user) {
     loadProjectOverview();
     loadCalendarData();
     loadAssigneeDropdown();
+    loadScienceMembers();
     SECTION_LOADED.dashboard = true;
     loadDashboardOverview(); // section mặc định đang hiển thị (Tổng Quan)
   }

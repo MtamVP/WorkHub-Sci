@@ -15,7 +15,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body class="app-locked">
 
@@ -102,6 +102,10 @@
         <div class="section-hero-info">
           <h3><i class="fa-solid fa-chart-pie" style="color: var(--cyan-accent);"></i> Tổng Quan Nhóm Khoa Học</h3>
           <p>Deadline hôm nay, tiến độ dự án và kho file chung — tất cả trong một màn hình.</p>
+        </div>
+        <div class="section-actions">
+          <button class="btn btn-primary" onclick="switchSection('pipeline')"><i class="fa-solid fa-layer-group"></i> Pipeline S1-S6</button>
+          <button class="btn btn-secondary" onclick="toggleMembersDrawer()"><i class="fa-solid fa-users"></i> Thành Viên</button>
         </div>
       </div>
 
@@ -650,6 +654,50 @@
     </div>
   </aside>
 
+  <!-- Members Drawer (Thành Viên) -->
+  <aside id="members-drawer" class="members-drawer">
+    <div class="members-drawer-header">
+      <div class="drawer-title-group">
+        <h4><i class="fa-solid fa-users" style="color: var(--cyan-accent);"></i> Thành Viên</h4>
+        <span class="members-total-count" id="members-total-count">0</span>
+      </div>
+      <button class="header-btn drawer-close-btn" id="members-drawer-close-btn" onclick="toggleMembersDrawer()" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div class="members-search-box">
+      <i class="fa-solid fa-magnifying-glass search-icon"></i>
+      <input type="text" id="members-search-input" placeholder="Tìm kiếm theo email, tên..." oninput="filterMembersList()">
+      <button id="members-clear-search" class="clear-search-btn" style="display:none;" onclick="clearMembersSearch()"><i class="fa-solid fa-circle-xmark"></i></button>
+    </div>
+
+    <div class="members-filter-tabs">
+      <button class="filter-tab active" data-filter="all" onclick="setMemberFilter('all', this)">
+        Tất cả (<span id="count-all">0</span>)
+      </button>
+      <button class="filter-tab" data-filter="online" onclick="setMemberFilter('online', this)">
+        Online (<span id="count-online">0</span>)
+      </button>
+      <button class="filter-tab" data-filter="offline" onclick="setMemberFilter('offline', this)">
+        Offline (<span id="count-offline">0</span>)
+      </button>
+    </div>
+
+    <div class="members-drawer-body" id="members-list-container">
+      <div class="loading-state">
+        <i class="fa-solid fa-circle-notch fa-spin"></i>
+        <span>Đang tải danh sách thành viên Science...</span>
+      </div>
+    </div>
+
+    <div class="members-drawer-footer">
+      <div class="footer-group-info">
+        <i class="fa-solid fa-shield-halved" style="color: var(--cyan-accent);"></i>
+        <span>Nhóm: <strong>Science & Research</strong></span>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="loadScienceMembers(true)" title="Tải lại danh sách"><i class="fa-solid fa-arrows-rotate"></i> Làm mới</button>
+    </div>
+  </aside>
+
   <!-- Auth / Login Modal -->
   <div class="modal-overlay" id="auth-modal">
     <div class="modal-card auth-modal-card">
@@ -838,7 +886,7 @@
     </div>
   </div>
 
-  <script src="api.js?v=5"></script>
-  <script src="script.js?v=8"></script>
+  <script src="api.js?v=6"></script>
+  <script src="script.js?v=9"></script>
 </body>
 </html>
