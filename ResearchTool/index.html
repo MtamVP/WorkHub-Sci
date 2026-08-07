@@ -1,0 +1,215 @@
+﻿<!doctype html>
+<html lang="vi">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Research Tools Hub</title>
+  <link rel="icon" type="image/png" href="/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ResearchTool/styles.css?v=2.7">
+</head>
+
+<body>
+  <header class="topbar">
+    <a class="brand" href="#home" aria-label="Research Tools Hub home">
+      <span class="brand-mark">R</span>
+      <span>
+        <strong>Research Tools Hub</strong>
+        <small>Scientific workflow dashboard</small>
+      </span>
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <a href="../index.html">← Dashboard</a>
+      <a href="#finder">Finder</a>
+      <a href="#workflow">Workflow</a>
+      <a href="#tools">Tools</a>
+      <a href="#compare">Compare</a>
+      <a href="#saved">Saved</a>
+    </nav>
+    <button class="icon-button" id="themeToggle" type="button" aria-label="Toggle theme" title="Toggle theme">◐</button>
+  </header>
+
+  <main id="home">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Workflow-first research toolkit</p>
+        <h1>Scientific Research Tools Hub</h1>
+        <p class="lead">Một dashboard chuyên nghiệp để tìm, so sánh, lưu và chọn tool phù hợp cho từng bước nghiên cứu
+          khoa học.</p>
+        <div class="hero-actions">
+          <a class="primary-link" href="#finder">Find tools</a>
+          <a class="ghost-link" href="#tools">Browse directory</a>
+        </div>
+      </div>
+
+      <aside class="database-panel" aria-labelledby="databaseTitle">
+        <div>
+          <p class="eyebrow">Google Drive database</p>
+          <h2 id="databaseTitle">Database source</h2>
+        </div>
+        <label for="databaseInput">Drive file ID, folder ID, or sharing URL</label>
+        <div class="input-row">
+          <input id="databaseInput" type="text" autocomplete="off">
+          <button id="connectDrive" type="button">Connect</button>
+        </div>
+        <p class="status" id="databaseStatus">Dùng dữ liệu mẫu. Nếu Drive là folder, app sẽ lưu ID và chờ file JSON
+          public/manifest.</p>
+        <details>
+          <summary>Database JSON schema</summary>
+          <pre><code>{
+  "tools": [
+    {
+      "name": "Zotero",
+      "type": "Reference manager",
+      "pricing": "Free",
+      "stage": ["organize", "write"],
+      "field": ["General"],
+      "difficulty": "Beginner",
+      "privacy": "Local-first",
+      "url": "https://www.zotero.org/",
+      "description": "Collect, organize, cite, and annotate sources.",
+      "bestFor": ["Citation management"],
+      "limitations": ["Sync storage may require paid upgrade"],
+      "alternatives": ["Mendeley", "EndNote"],
+      "tags": ["Citation", "PDF", "Open-source"]
+    }
+  ]
+}</code></pre>
+        </details>
+      </aside>
+    </section>
+
+    <section class="panel search-panel">
+      <label for="globalSearch">Search by tool, task, method, field, or tag</label>
+      <div class="search-box">
+        <span aria-hidden="true">⌕</span>
+        <input id="globalSearch" type="search"
+          placeholder='Ví dụ: "systematic review", "citation", "survey", "qualitative"'>
+      </div>
+      <div class="quick-actions" id="quickActions" aria-label="Workflow shortcuts"></div>
+    </section>
+
+    <section class="panel" id="finder">
+      <div class="section-heading">
+        <p class="eyebrow">Smart finder</p>
+        <h2>What are you trying to do?</h2>
+        <p>Chọn một nhu cầu để nhận stack đề xuất và lọc directory tương ứng.</p>
+      </div>
+      <div class="finder-grid" id="finderGrid"></div>
+      <div class="recommendation" id="recommendation"></div>
+    </section>
+
+    <section class="panel" id="workflow">
+      <div class="section-heading">
+        <p class="eyebrow">Research lifecycle</p>
+        <h2>Workflow Map</h2>
+        <p>Lọc tool theo đúng bước trong quy trình nghiên cứu.</p>
+      </div>
+      <div class="workflow-grid" id="workflowGrid"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <p class="eyebrow">Presets</p>
+        <h2>Field-Specific Toolkits</h2>
+        <p>Bộ lọc nhanh theo ngành và kiểu nghiên cứu.</p>
+      </div>
+      <div class="preset-grid" id="presetGrid"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <p class="eyebrow">Recommended combinations</p>
+        <h2>Research Stacks</h2>
+        <p>Các bộ tool dùng được ngay cho những workflow phổ biến.</p>
+      </div>
+      <div class="stack-grid" id="stackGrid"></div>
+    </section>
+
+    <section class="tools-layout" id="tools">
+      <aside class="filters" aria-label="Filters">
+        <div class="filter-header">
+          <h2>Filters</h2>
+          <button class="text-button" id="clearFilters" type="button">Clear</button>
+        </div>
+        <div class="filter-block">
+          <h3>Stage</h3>
+          <div id="stageFilters"></div>
+        </div>
+        <div class="filter-block">
+          <h3>Pricing</h3>
+          <div id="pricingFilters"></div>
+        </div>
+        <div class="filter-block">
+          <h3>Field</h3>
+          <div id="fieldFilters"></div>
+        </div>
+        <div class="filter-block">
+          <h3>Difficulty</h3>
+          <div id="difficultyFilters"></div>
+        </div>
+      </aside>
+
+      <section class="panel tool-directory">
+        <div class="section-heading compact">
+          <div>
+            <p class="eyebrow">Curated directory</p>
+            <h2>Tools</h2>
+          </div>
+          <div class="directory-controls">
+            <span id="toolCount">0 tools</span>
+            <select id="sortTools" aria-label="Sort tools">
+              <option value="recommended">Recommended</option>
+              <option value="name">Name</option>
+              <option value="free">Free first</option>
+              <option value="difficulty">Beginner first</option>
+            </select>
+          </div>
+        </div>
+        <div class="tool-grid" id="toolGrid"></div>
+      </section>
+    </section>
+
+    <section class="panel" id="compare">
+      <div class="section-heading compact">
+        <div>
+          <p class="eyebrow">Decision support</p>
+          <h2>Compare Tools</h2>
+          <p>Chọn 2-4 tool trong directory để so sánh chi tiết.</p>
+        </div>
+        <button class="secondary-button" id="clearCompare" type="button">Clear compare</button>
+      </div>
+      <div class="compare-table-wrap" id="compareTable"></div>
+    </section>
+
+    <section class="panel" id="saved">
+      <div class="section-heading compact">
+        <div>
+          <p class="eyebrow">Personal toolkit</p>
+          <h2>Saved Tools</h2>
+        </div>
+        <span id="savedCount">0 saved</span>
+      </div>
+      <div class="tool-grid" id="savedGrid"></div>
+    </section>
+  </main>
+
+  <dialog class="tool-modal" id="toolModal">
+    <div class="modal-head">
+      <div>
+        <p class="eyebrow" id="modalType"></p>
+        <h2 id="modalTitle"></h2>
+      </div>
+      <button class="icon-button" id="closeModal" type="button" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+
+</html>

@@ -519,9 +519,9 @@ function skeletonListItems(count) {
   return html;
 }
 
-// -------------------- Section navigation (Pipeline / Task / Progress / Calendar / Drive / My Tasks / Tools / AI) --------------------
+// -------------------- Section navigation (Pipeline / Task / Progress / Calendar / Drive / My Tasks) --------------------
 
-const SECTION_KEYS = ['pipeline', 'task', 'progress', 'calendar', 'drive', 'mytasks', 'tools', 'ai'];
+const SECTION_KEYS = ['pipeline', 'task', 'progress', 'calendar', 'drive', 'mytasks'];
 
 // Cờ tải-một-lần cho các section được nạp lười (chỉ gọi API lần đầu ghé thăm).
 // Pipeline/Task/Progress/Calendar không có mặt ở đây vì dữ liệu của chúng đã được

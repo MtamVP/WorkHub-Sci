@@ -86,11 +86,8 @@
         <li class="nav-item" data-section="mytasks" onclick="switchSection('mytasks')">
           <i class="fa-solid fa-user-check"></i><span> Việc của tôi</span>
         </li>
-        <li class="nav-item" data-section="tools" onclick="switchSection('tools')">
-          <i class="fa-solid fa-toolbox"></i><span> Công cụ</span>
-        </li>
-        <li class="nav-item" data-section="ai" onclick="switchSection('ai')">
-          <i class="fa-solid fa-robot"></i><span> AI</span>
+        <li class="nav-item" onclick="window.top.location.href='/ResearchTool/'">
+          <i class="fa-solid fa-compass"></i><span> Công cụ Nghiên cứu</span>
         </li>
       </ul>
     </nav>
@@ -540,56 +537,6 @@
       </div>
     </section>
 
-    <!-- ================= TOOLS SECTION ("Công cụ") — static gallery, no API ================= -->
-    <section class="app-section" id="tools-section">
-      <div class="section-hero-card card">
-        <div class="section-hero-info">
-          <h3><i class="fa-solid fa-toolbox" style="color: var(--cyan-accent);"></i> Công Cụ</h3>
-          <p>Các công cụ dùng chung của WorkHub, mỗi công cụ mở trong tab mới.</p>
-        </div>
-      </div>
-
-      <div class="grid-3">
-        <div class="card">
-          <h3 style="display:flex; align-items:center; gap:10px; margin-bottom:8px;"><i class="fa-brands fa-discord" style="color: var(--cyan-accent);"></i> Discord File Saver</h3>
-          <p style="color:var(--text-secondary); font-size:14px; margin-bottom:16px;">Lưu lại file đính kèm từ Discord về máy nhanh chóng.</p>
-          <a class="btn btn-primary" href="https://discordfilesaver.pages.dev/" target="_blank" rel="noopener">Mở công cụ</a>
-        </div>
-        <div class="card">
-          <h3 style="display:flex; align-items:center; gap:10px; margin-bottom:8px;"><i class="fa-solid fa-video" style="color: var(--cyan-accent);"></i> Auto DownLoad Video Pro</h3>
-          <p style="color:var(--text-secondary); font-size:14px; margin-bottom:16px;">Tự động tải video từ nhiều nguồn khác nhau.</p>
-          <a class="btn btn-primary" href="https://autovideoproduction.pages.dev/" target="_blank" rel="noopener">Mở công cụ</a>
-        </div>
-        <div class="card">
-          <h3 style="display:flex; align-items:center; gap:10px; margin-bottom:8px;"><i class="fa-solid fa-closed-captioning" style="color: var(--cyan-accent);"></i> Auto Caption Video Pro</h3>
-          <p style="color:var(--text-secondary); font-size:14px; margin-bottom:16px;">Tự động tạo phụ đề cho video.</p>
-          <a class="btn btn-primary" href="https://autocaption-workhub.pages.dev/" target="_blank" rel="noopener">Mở công cụ</a>
-        </div>
-        <div class="card">
-          <h3 style="display:flex; align-items:center; gap:10px; margin-bottom:8px;"><i class="fa-solid fa-file-pdf" style="color: var(--cyan-accent);"></i> PDF-Pocket</h3>
-          <p style="color:var(--text-secondary); font-size:14px; margin-bottom:16px;">Bộ công cụ xử lý PDF nhanh gọn.</p>
-          <a class="btn btn-primary" href="https://pdf-pocket.pages.dev/" target="_blank" rel="noopener">Mở công cụ</a>
-        </div>
-        <div class="card">
-          <h3 style="display:flex; align-items:center; gap:10px; margin-bottom:8px;"><i class="fa-solid fa-robot" style="color: var(--cyan-accent);"></i> AI Auto-Uploader</h3>
-          <p style="color:var(--text-secondary); font-size:14px; margin-bottom:16px;">Hướng dẫn thiết lập công cụ tự động tải lên bằng AI.</p>
-          <a class="btn btn-primary" href="https://workhub-ai.pages.dev/tools/ai_uploader_setup/index.html" target="_blank" rel="noopener">Mở công cụ</a>
-        </div>
-        <div class="card">
-          <h3 style="display:flex; align-items:center; gap:10px; margin-bottom:8px;"><i class="fa-solid fa-grip" style="color: var(--cyan-accent);"></i> Xem tất cả công cụ</h3>
-          <p style="color:var(--text-secondary); font-size:14px; margin-bottom:16px;">Danh sách đầy đủ mọi công cụ hiện có của WorkHub.</p>
-          <a class="btn btn-secondary" href="https://workhub-ai.pages.dev/tools/" target="_blank" rel="noopener">Xem tất cả</a>
-        </div>
-      </div>
-    </section>
-
-    <!-- ================= AI SECTION — stub only, real backend scoped separately ================= -->
-    <section class="app-section" id="ai-section">
-      <h2><i class="fa-solid fa-robot"></i> AI Assistant</h2>
-      <p class="text-muted">Sắp ra mắt.</p>
-    </section>
-
-
     </main>
   </div>
 
@@ -792,6 +739,6 @@
   </div>
 
   <script src="api.js?v=5"></script>
-  <script src="script.js?v=5"></script>
+  <script src="script.js?v=6"></script>
 </body>
 </html>
