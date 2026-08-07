@@ -1,8 +1,3 @@
 name = "workhub-sci"
 pages_build_output_dir = "."
 compatibility_date = "2026-08-01"
-
-[[d1_databases]]
-binding = "DB"
-database_name = "research-hub"
-database_id = "b3e55a2c-0f2e-4364-b5f7-8cc9b0d7be16"
