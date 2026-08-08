@@ -15,6 +15,7 @@
   --science-accent: #2F6AE0;
   --science-accent-light: #5B8FF9;
   --science-glow: rgba(47, 106, 224, 0.30);
+  --science-dim: rgba(91, 143, 249, 0.14);
   --cyan-accent: #00D2FF;
   --cyan-glow: rgba(0, 210, 255, 0.25);
   --primary-color: var(--science-accent-light);
@@ -72,6 +73,7 @@
   --science-accent: #2558BE;
   --science-accent-light: #2F6AE0;
   --science-glow: rgba(37, 88, 190, 0.18);
+  --science-dim: rgba(37, 88, 190, 0.12);
   --cyan-accent: #0088CC;
 
   --shadow-soft: 0 1px 4px rgba(18, 26, 44, 0.08);
@@ -236,7 +238,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
   display: flex; flex-direction: column; overflow-x: hidden;
 }
 #app-sidebar.expanded { width: var(--sidebar-width); }
-#app-sidebar ul { list-style: none; padding: 0 12px; margin: 0; }
+#app-sidebar ul { list-style: none; padding: 0 10px; margin: 0; }
 
 #hamburger-menu {
   text-align: center; padding: 10px; margin-bottom: 10px; cursor: pointer;
@@ -245,23 +247,40 @@ button { font-family: inherit; cursor: pointer; border: none; }
 }
 #hamburger-menu:hover { color: var(--text-primary); }
 
+/* Nhãn nhóm chức năng (Khoa Học / Dự Án / Công Cụ / Quản Trị) — nhỏ, mảnh, không in đậm,
+   thu lại thành một gạch chia mảnh khi sidebar ở chế độ icon-only. */
+.nav-group-label {
+  padding: 14px 12px 6px; margin: 0;
+  font-size: 10px; font-weight: 400; letter-spacing: 1.4px; text-transform: uppercase;
+  color: var(--text-muted); white-space: nowrap; overflow: hidden;
+}
+#app-sidebar:not(.expanded) .nav-group-label {
+  padding: 10px 16px; margin: 6px 0 2px;
+  border-top: 1px solid var(--border-color);
+}
+#app-sidebar:not(.expanded) .nav-group-label span { display: none; }
+
 .nav-item {
-  display: flex; align-items: center; padding: 11px 14px; margin-bottom: 2px;
-  cursor: pointer; border-radius: var(--radius-sm);
-  color: var(--text-secondary); font-weight: 500; font-size: 14px;
-  transition: all 0.2s ease;
+  display: flex; align-items: center; gap: 11px; padding: 9px 12px; margin-bottom: 1px;
+  cursor: pointer; border-radius: var(--radius-sm); position: relative;
+  color: var(--text-secondary); font-weight: 500; font-size: 13.5px;
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   justify-content: center; white-space: nowrap;
-  border-left: 2px solid transparent;
 }
-.nav-item span { font-size: 15px; font-weight: 500; }
+.nav-item span { font-size: 13.5px; font-weight: 500; }
 .nav-item:hover { background-color: var(--hover-bg); color: var(--text-primary); }
+.nav-item:hover i { transform: translateX(1px); }
 .nav-item.active {
-  background: color-mix(in srgb, var(--cyan-accent) 14%, transparent);
-  color: var(--cyan-accent);
+  background: var(--science-dim);
+  color: var(--science-accent-light);
   font-weight: 600;
-  border-left-color: var(--cyan-accent);
+  box-shadow: inset 3px 0 0 var(--science-accent);
 }
-.nav-item i { font-size: 17px; min-width: 24px; text-align: center; }
+.nav-item i { font-size: 18px; width: 20px; text-align: center; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+
+#app-sidebar.expanded .nav-item { justify-content: flex-start; }
+#app-sidebar.expanded .nav-item span { display: inline-block; }
+#app-sidebar:not(.expanded) .nav-item span { display: none; }
 
 #app-sidebar.expanded .nav-item { justify-content: flex-start; }
 #app-sidebar.expanded .nav-item span { display: inline-block; margin-left: 14px; }

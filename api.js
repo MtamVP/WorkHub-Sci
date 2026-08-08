@@ -116,7 +116,7 @@ const API = {
                 const { data: usersData, error: userErr } = await sbClient
                     .from('users')
                     .select('email, nickname, group_key, created_at')
-                    .in('group_key', ['science', 'admin', 'all', 'Science', 'Admin', 'All'])
+                    .eq('group_key', 'science')
                     .order('created_at', { ascending: false });
 
                 if (userErr) console.warn("Lỗi lấy users:", userErr);
@@ -1643,6 +1643,40 @@ const API = {
             try { sbClient.removeChannel(API.realtime._channel); } catch (err) {  }
             API.realtime._channel = null;
         }
+    },
+
+    sciRoles: {
+        // Vai trò tầng 2 riêng của Science ("phòng thí nghiệm") — không liên quan group_key của org.
+        getMyRoles: async (email) => {
+            const userId = await getUserId(email);
+            const { data, error } = await sbClient.from('sci_roles').select('role').eq('user_id', userId);
+            if (error) throw error;
+            return (data || []).map(r => r.role);
+        },
+        listAll: async () => {
+            const { data: members, error: mErr } = await sbClient.from('users').select('id, email, nickname').in('group_key', ['science', 'all']);
+            if (mErr) throw mErr;
+            const { data: roles, error: rErr } = await sbClient.from('sci_roles').select('user_id, role');
+            if (rErr) throw rErr;
+            return (members || []).map(m => ({
+                email: m.email,
+                nickname: m.nickname || m.email,
+                roles: (roles || []).filter(r => r.user_id === m.id).map(r => r.role)
+            }));
+        },
+        grantRole: async (targetEmail, role, byEmail) => {
+            const targetId = await getUserId(targetEmail);
+            const byId = await getUserId(byEmail);
+            const { error } = await sbClient.from('sci_roles').insert({ user_id: targetId, role, granted_by: byId });
+            if (error) throw error;
+            return { success: true };
+        },
+        revokeRole: async (targetEmail, role) => {
+            const targetId = await getUserId(targetEmail);
+            const { error } = await sbClient.from('sci_roles').delete().eq('user_id', targetId).eq('role', role);
+            if (error) throw error;
+            return { success: true };
+        }
     }
 };
 
@@ -1656,7 +1690,8 @@ const MUTATING_ACTIONS = new Set([
     'createEvent', 'updateEvent', 'deleteEvent', 'toggleImportant',
     'uploadFile', 'deleteFile', 'shareFile',
     'restoreItem', 'hardDeleteItem',
-    'provisionUser', 'updateUserGroup', 'removeUser', 'updateNickname'
+    'provisionUser', 'updateUserGroup', 'removeUser', 'updateNickname',
+    'grantSciRole', 'revokeSciRole'
 ]);
 
 window.callGAS = async function(action, params = {}) {
@@ -1750,6 +1785,11 @@ window.callGAS = async function(action, params = {}) {
 
             case 'getNotifications': result = await API.notification.get(params.groupKey, params.limit, params.email); break;
             case 'syncLounge': result = await API.lounge.sync(params); break;
+
+            case 'getMySciRoles': result = await API.sciRoles.getMyRoles(params.email); break;
+            case 'listSciRoles': result = await API.sciRoles.listAll(); break;
+            case 'grantSciRole': result = await API.sciRoles.grantRole(params.targetEmail, params.role, params.byEmail); break;
+            case 'revokeSciRole': result = await API.sciRoles.revokeRole(params.targetEmail, params.role); break;
 
             default:
                 console.warn(`Supabase chưa hỗ trợ action: ${action}`);

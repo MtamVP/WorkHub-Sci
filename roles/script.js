@@ -1,0 +1,133 @@
+/* --- FILE: /roles/script.js --- */
+
+let currentUserEmail = '';
+let isSciAdmin = false;
+
+const ROLE_LABELS = {
+    lab_director: 'Trưởng Phòng Thí Nghiệm', collaborator: 'Cộng Tác Viên',
+    sci_admin: 'Quản trị phân quyền',
+    platform_lead: 'Phụ Trách Nền Tảng', chief_assistant: 'Trưởng Trợ Lý'
+};
+
+document.addEventListener('DOMContentLoaded', async function () {
+    currentUserEmail = localStorage.getItem('userEmail') || '';
+
+    try {
+        const myRolesResp = await callGAS('getMySciRoles', { email: currentUserEmail });
+        const myRoles = myRolesResp.data || [];
+        // platform_lead/chief_assistant là vai trò toàn quyền — DB (current_user_has_sci_role) đã coi
+        // họ như có mọi vai trò, nên UI cũng phải hiện khung "Gán vai trò" cho họ, không chỉ sci_admin.
+        isSciAdmin = myRoles.includes('sci_admin') || myRoles.includes('platform_lead') || myRoles.includes('chief_assistant');
+    } catch (e) {
+        console.error('Lỗi getMySciRoles:', e);
+    }
+
+    const adminPanel = document.getElementById('admin-panel');
+    if (adminPanel) adminPanel.style.display = isSciAdmin ? 'block' : 'none';
+
+    const grantForm = document.getElementById('grant-form');
+    if (grantForm) grantForm.addEventListener('submit', handleGrant);
+
+    await loadRoles();
+});
+
+async function loadRoles() {
+    const tbody = document.getElementById('roles-table-body');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="3" class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> Đang tải...</td></tr>';
+
+    try {
+        const response = await callGAS('listSciRoles');
+        const members = response.data || [];
+
+        if (members.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="empty-state">Chưa có thành viên nào trong nhóm Science.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = members.map(m => `
+            <tr>
+                <td>
+                    <div class="member-name">${escapeRolesHtml(m.nickname)}</div>
+                    <div class="member-email">${escapeRolesHtml(m.email)}</div>
+                </td>
+                <td>${renderRoleBadges(m)}</td>
+                <td class="text-right">${renderRevokeButtons(m)}</td>
+            </tr>`).join('');
+
+        if (isSciAdmin) populateMemberSelect(members);
+    } catch (e) {
+        console.error('Lỗi loadRoles:', e);
+        tbody.innerHTML = `<tr><td colspan="3" class="empty-state text-danger">Lỗi: ${escapeRolesHtml(e.message)}</td></tr>`;
+    }
+}
+
+function renderRoleBadges(member) {
+    if (!member.roles || member.roles.length === 0) {
+        return '<span class="role-badge role-badge-none">Chưa có vai trò</span>';
+    }
+    return member.roles.map(r => `<span class="role-badge"><i class="fa-solid fa-shield-halved"></i>${escapeRolesHtml(ROLE_LABELS[r] || r)}</span>`).join('');
+}
+
+function renderRevokeButtons(member) {
+    if (!isSciAdmin || !member.roles || member.roles.length === 0) return '';
+    return member.roles.map(r => `
+        <button class="btn-revoke" data-email="${escapeRolesHtml(member.email)}" data-role="${escapeRolesHtml(r)}"
+            onclick="handleRevoke(this)" title="Gỡ vai trò: ${escapeRolesHtml(ROLE_LABELS[r] || r)}">
+            <i class="fa-solid fa-xmark"></i>
+        </button>`).join('');
+}
+
+function populateMemberSelect(members) {
+    const select = document.getElementById('grant-member');
+    if (!select) return;
+    select.innerHTML = '<option value="">-- Chọn --</option>' +
+        members.map(m => `<option value="${escapeRolesHtml(m.email)}">${escapeRolesHtml(m.nickname)} (${escapeRolesHtml(m.email)})</option>`).join('');
+}
+
+async function handleGrant(e) {
+    e.preventDefault();
+    const targetEmail = document.getElementById('grant-member').value;
+    const role = document.getElementById('grant-role').value;
+
+    if (!targetEmail) {
+        showToast('Vui lòng chọn thành viên', 'error');
+        return;
+    }
+
+    try {
+        await callGAS('grantSciRole', { targetEmail, role, byEmail: currentUserEmail });
+        showToast('Đã gán vai trò thành công', 'success');
+        await loadRoles();
+    } catch (e) {
+        showToast('Lỗi: ' + e.message, 'error');
+    }
+}
+
+async function handleRevoke(btn) {
+    const targetEmail = btn.dataset.email;
+    const role = btn.dataset.role;
+    try {
+        await callGAS('revokeSciRole', { targetEmail, role });
+        showToast('Đã gỡ vai trò', 'success');
+        await loadRoles();
+    } catch (e) {
+        showToast('Lỗi: ' + e.message, 'error');
+    }
+}
+
+function escapeRolesHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+}
+
+function showToast(message, type = 'success') {
+    const existing = document.querySelector('.toast-notification');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.className = `toast-notification toast-${type}`;
+    const icon = type === 'success' ? '<i class="fa-solid fa-circle-check"></i>' : '<i class="fa-solid fa-circle-exclamation"></i>';
+    toast.innerHTML = `${icon} <span>${message}</span>`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}

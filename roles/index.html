@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phân Quyền | WorkHub Science</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+    <script>
+      /* Dong bo dark mode voi app shell truoc khi trang ve */
+      (function () {
+        try {
+          var t = localStorage.getItem('user-theme');
+          var h = new Date().getHours();
+          if (t === 'dark' || ((t === 'auto' || !t) && (h >= 18 || h < 6))) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="stylesheet" href="/style.css?v=10">
+    <link rel="stylesheet" href="/roles/style.css?v=1">
+</head>
+<body>
+
+    <div class="roles-container">
+
+        <div class="roles-top-bar">
+            <div class="roles-top-left">
+                <a href="/" class="roles-back-link">
+                    <i class="fa-solid fa-house"></i> <span>Science</span>
+                </a>
+                <h1>Phân Quyền</h1>
+            </div>
+            <button onclick="loadRoles()" class="btn btn-outline">
+                <i class="fa-solid fa-rotate-right"></i> Làm mới
+            </button>
+        </div>
+
+        <p class="roles-intro">
+            Vai trò cấp 2 riêng của WorkHub Science — độc lập với nhóm (group) do org quản lý. Vai trò ở đây quyết định
+            ai được toàn quyền quản trị Pipeline / Tài liệu Nghiên Cứu / Công cụ Nghiên cứu thay cho người khác.
+        </p>
+
+        <div id="admin-panel" class="card roles-admin-panel" style="display:none;">
+            <h3 class="roles-panel-title"><i class="fa-solid fa-user-plus"></i> Gán vai trò</h3>
+            <form id="grant-form" class="grant-form-grid">
+                <div class="form-group">
+                    <label class="form-label" for="grant-member">Thành viên</label>
+                    <select id="grant-member" class="form-select" required>
+                        <option value="">-- Chọn --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="grant-role">Vai trò</label>
+                    <select id="grant-role" class="form-select">
+                        <option value="lab_director">Trưởng Phòng Thí Nghiệm</option>
+                        <option value="collaborator">Cộng Tác Viên</option>
+                        <option value="sci_admin">Quản trị phân quyền</option>
+                        <option value="platform_lead">Phụ Trách Nền Tảng (toàn quyền)</option>
+                        <option value="chief_assistant">Trưởng Trợ Lý (toàn quyền)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Gán vai trò</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="table-container card">
+            <table class="data-table" id="roles-table" style="width:100%;">
+                <thead>
+                    <tr>
+                        <th>Thành viên</th>
+                        <th>Vai trò hiện tại</th>
+                        <th class="text-right">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody id="roles-table-body">
+                    <tr><td colspan="3" class="empty-state">Đang tải...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../api.js?v=7"></script>
+    <script src="script.js?v=1"></script>
+</body>
+</html>
