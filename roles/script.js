@@ -4,9 +4,9 @@ let currentUserEmail = '';
 let isSciAdmin = false;
 
 const ROLE_LABELS = {
-    lab_director: 'Trưởng Phòng Thí Nghiệm', collaborator: 'Cộng Tác Viên',
+    lab_director: 'Trưởng Phòng Thí Nghiệm', collaborator: 'Cộng Tác Viên', representative: 'Người Đại Diện',
     sci_admin: 'Quản trị phân quyền',
-    platform_lead: 'Phụ Trách Nền Tảng', chief_assistant: 'Trưởng Trợ Lý'
+    platform_lead: 'Phụ Trách Nền Tảng'
 };
 
 document.addEventListener('DOMContentLoaded', async function () {
@@ -24,9 +24,9 @@ document.addEventListener('DOMContentLoaded', async function () {
     try {
         const myRolesResp = await callGAS('getMySciRoles', { email: currentUserEmail });
         const myRoles = myRolesResp.data || [];
-        // platform_lead/chief_assistant là vai trò toàn quyền — DB (current_user_has_sci_role) đã coi
-        // họ như có mọi vai trò, nên UI cũng phải hiện khung "Gán vai trò" cho họ, không chỉ sci_admin.
-        isSciAdmin = myRoles.includes('sci_admin') || myRoles.includes('platform_lead') || myRoles.includes('chief_assistant');
+        // platform_lead là vai trò toàn quyền — DB (current_user_has_sci_role) đã coi họ như
+        // có mọi vai trò, nên UI cũng phải hiện khung "Gán vai trò" cho họ, không chỉ sci_admin.
+        isSciAdmin = myRoles.includes('sci_admin') || myRoles.includes('platform_lead');
     } catch (e) {
         console.error('Lỗi getMySciRoles:', e);
     }
