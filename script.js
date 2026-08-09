@@ -926,6 +926,9 @@ async function loadChatMessages() {
   renderChatPinnedBar();
   list.scrollTop = list.scrollHeight;
 
+  renderChatPresenceList();
+  loadScienceMembers().then(() => renderChatPresenceList()).catch(() => {});
+
   const input = document.getElementById('chat-msg-input');
   const sendBtn = document.getElementById('chat-send-btn');
   if (input) input.disabled = false;
@@ -988,8 +991,145 @@ async function sendChatMessage(event) {
   }
 }
 
+function renderChatPresenceList() {
+  const list = document.getElementById('chat-presence-list');
+  const countEl = document.getElementById('chat-presence-online-count');
+  if (!list) return;
+
+  if (!SCIENCE_MEMBERS.length) {
+    list.innerHTML = '<div class="empty-state"><i class="fa-solid fa-user-slash"></i> Chưa có dữ liệu thành viên</div>';
+    if (countEl) countEl.textContent = '0';
+    return;
+  }
+
+  const sorted = SCIENCE_MEMBERS.slice().sort((a, b) => (b.isOnline ? 1 : 0) - (a.isOnline ? 1 : 0));
+  if (countEl) countEl.textContent = String(sorted.filter(m => m.isOnline).length);
+
+  list.innerHTML = sorted.map(member => {
+    const initials = getInitials(member.nickname || member.email);
+    const statusDotClass = member.isOnline ? 'online' : 'offline';
+    const statusText = member.isOnline ? 'Đang hoạt động' : timeAgoVietnamese(member.last_changed);
+    const isMe = (member.email || '').toLowerCase() === (CURRENT_USER.email || '').toLowerCase();
+
+    return `
+      <div class="member-item-card chat-presence-item" title="${escapeHtml(member.email)}">
+        <div class="member-avatar-box">
+          <div class="member-avatar-circle">${escapeHtml(initials)}</div>
+          <div class="status-dot-indicator ${statusDotClass}"></div>
+        </div>
+        <div class="member-content">
+          <div class="member-email-title">
+            <span>${escapeHtml(member.nickname || member.email)}</span>
+            ${isMe ? '<span class="member-badge-pill">Bạn</span>' : ''}
+          </div>
+          <div class="member-activity-status ${statusDotClass}"><span>${escapeHtml(statusText)}</span></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// -------------------- Chat @mention autocomplete --------------------
+
+let chatMentionMatches = [];
+let chatMentionActiveIndex = -1;
+let chatMentionAtPos = -1;
+
+function chatMentionCandidates() {
+  const list = SCIENCE_MEMBERS.filter(m => m.nickname).map(m => ({ label: m.nickname }));
+  list.unshift({ label: 'All' });
+  return list;
+}
+
+function updateChatMentionDropdown() {
+  const input = document.getElementById('chat-msg-input');
+  const dropdown = document.getElementById('chat-mention-dropdown');
+  if (!input || !dropdown) return;
+
+  const text = input.value;
+  const caret = input.selectionStart;
+  const at = text.lastIndexOf('@', caret - 1);
+
+  if (at === -1) { closeChatMentionDropdown(); return; }
+  const fragment = text.slice(at + 1, caret);
+  if (fragment.includes('\n') || fragment.length > 24) { closeChatMentionDropdown(); return; }
+
+  const query = fragment.toLowerCase();
+  const matches = chatMentionCandidates().filter(c => c.label.toLowerCase().includes(query));
+  if (!matches.length) { closeChatMentionDropdown(); return; }
+
+  chatMentionMatches = matches;
+  chatMentionActiveIndex = 0;
+  chatMentionAtPos = at;
+
+  dropdown.innerHTML = matches.map((c, i) =>
+    '<div class="chat-mention-item' + (i === 0 ? ' active' : '') + '" onmousedown="event.preventDefault(); pickChatMention(' + i + ')">' +
+    '<span class="chat-mention-avatar">' + escapeHtml(getInitials(c.label)) + '</span>' +
+    '<span>' + escapeHtml(c.label) + '</span>' +
+    '</div>'
+  ).join('');
+  dropdown.style.display = 'block';
+}
+
+function closeChatMentionDropdown() {
+  const dropdown = document.getElementById('chat-mention-dropdown');
+  if (dropdown) { dropdown.style.display = 'none'; dropdown.innerHTML = ''; }
+  chatMentionMatches = [];
+  chatMentionActiveIndex = -1;
+  chatMentionAtPos = -1;
+}
+
+function highlightChatMentionActive() {
+  document.querySelectorAll('#chat-mention-dropdown .chat-mention-item').forEach((el, i) => {
+    el.classList.toggle('active', i === chatMentionActiveIndex);
+  });
+}
+
+function pickChatMention(index) {
+  const input = document.getElementById('chat-msg-input');
+  const match = chatMentionMatches[index];
+  if (!input || !match || chatMentionAtPos === -1) { closeChatMentionDropdown(); return; }
+
+  const caret = input.selectionStart;
+  const before = input.value.slice(0, chatMentionAtPos);
+  const after = input.value.slice(caret);
+  const insertion = '@' + match.label + ' ';
+  input.value = before + insertion + after;
+
+  const newCaret = (before + insertion).length;
+  input.setSelectionRange(newCaret, newCaret);
+  input.focus();
+  closeChatMentionDropdown();
+}
+
+function handleChatMentionKeydown(e) {
+  const dropdown = document.getElementById('chat-mention-dropdown');
+  if (!dropdown || dropdown.style.display !== 'block' || !chatMentionMatches.length) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    chatMentionActiveIndex = (chatMentionActiveIndex + 1) % chatMentionMatches.length;
+    highlightChatMentionActive();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    chatMentionActiveIndex = (chatMentionActiveIndex - 1 + chatMentionMatches.length) % chatMentionMatches.length;
+    highlightChatMentionActive();
+  } else if (e.key === 'Enter' || e.key === 'Tab') {
+    e.preventDefault();
+    pickChatMention(chatMentionActiveIndex);
+  } else if (e.key === 'Escape') {
+    closeChatMentionDropdown();
+  }
+}
+
 const chatInputForm = document.getElementById('chat-input-form');
 if (chatInputForm) chatInputForm.addEventListener('submit', sendChatMessage);
+
+const chatMsgInputEl = document.getElementById('chat-msg-input');
+if (chatMsgInputEl) {
+  chatMsgInputEl.addEventListener('input', updateChatMentionDropdown);
+  chatMsgInputEl.addEventListener('keydown', handleChatMentionKeydown);
+  chatMsgInputEl.addEventListener('blur', () => setTimeout(closeChatMentionDropdown, 150));
+}
 
 // -------------------- Task render helpers --------------------
 
