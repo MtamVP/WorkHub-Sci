@@ -1319,14 +1319,14 @@ async function handleProjectCreationOrUpdate() {
 
 function shareProjectAction(projectId, projectName) {
   Swal.fire({
-    title: 'Chia sẻ Dự án?',
-    html: `Bạn có muốn sao chép dự án <b>"${escapeHtml(projectName)}"</b> và toàn bộ công việc sang Dashboard Chung không?<br><small style="color: var(--text-muted);">(Sẽ tạo một bản sao mới)</small>`,
+    title: 'Chia sẻ dự án lên WorkHub Org?',
+    html: `Dự án <b>"${escapeHtml(projectName)}"</b> sẽ được hiển thị trên Dashboard Chung của WorkHub Org.<br><small style="color: var(--text-muted);">Đây là chia sẻ trực tiếp — không tạo bản sao, mọi cập nhật sau này (tiến độ, công việc...) sẽ luôn tự động đồng bộ.</small>`,
     icon: 'question',
     showCancelButton: true,
     confirmButtonColor: 'var(--cyan-accent)',
     cancelButtonColor: 'var(--text-muted)',
-    confirmButtonText: 'Chia sẻ cho thầy đi!',
-    cancelButtonText: 'Thôi'
+    confirmButtonText: 'Chia sẻ',
+    cancelButtonText: 'Huỷ'
   }).then(async (result) => {
     if (!result.isConfirmed) return;
 
