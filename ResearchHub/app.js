@@ -201,7 +201,8 @@ async function ensureLinkedProject(topic) {
         owner_id: ownerId,
         status: "Planning",
         description: `Tự động tạo từ Research Hub — chủ đề nghiên cứu "${topic.title}".`,
-        group_key: "science"
+        group_key: "science",
+        is_shared: true
       });
       if (error) throw error;
       showToast(`Đã tự động tạo dự án "${topic.title}" trong mục Dự Án.`);
