@@ -52,7 +52,7 @@ const STAGES_META = {
 const STAGE_KEYS = ['s1', 's2', 's3', 's4', 's5', 's6'];
 let currentStageIndex = 0;
 
-const ALLOWED_GROUPS = ['workhub-sci', 'admin', 'all'];
+const ALLOWED_GROUPS = ['workhub-sci', 'admin', 'all', 'science'];
 
 let CURRENT_USER = {
   email: '',
