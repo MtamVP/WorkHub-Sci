@@ -305,6 +305,7 @@ document.addEventListener('click', (e) => {
 
 async function resolveUserProfile(user) {
   CURRENT_USER.email = user.email;
+  CURRENT_USER.id = user.id;
 
   try {
     const info = await API.auth.getUserInfo(user.email);
@@ -377,8 +378,9 @@ async function initAuth() {
         logPipelineEvent(`Đã đăng nhập tài khoản: ${user.email}`, 'success', 'USER_LOGIN');
       }
     } else {
-      CURRENT_USER = { email: '', nickname: '', groupKey: '' };
+      CURRENT_USER = { email: '', nickname: '', groupKey: '', id: '' };
       if (typeof stopRealtimeSync === 'function') stopRealtimeSync();
+      if (chatChannel && sbClient) { sbClient.removeChannel(chatChannel); chatChannel = null; }
       lockApp();
     }
   });
@@ -710,12 +712,12 @@ function skeletonListItems(count) {
 
 // -------------------- Section navigation (Tổng Quan / Pipeline / Task / Progress / Calendar / Drive / My Tasks) --------------------
 
-const SECTION_KEYS = ['dashboard', 'pipeline', 'task', 'progress', 'calendar', 'drive', 'mytasks'];
+const SECTION_KEYS = ['dashboard', 'chat', 'pipeline', 'task', 'progress', 'calendar', 'drive', 'mytasks'];
 
 // Cờ tải-một-lần cho các section được nạp lười (chỉ gọi API lần đầu ghé thăm).
 // Pipeline/Task/Progress/Calendar không có mặt ở đây vì dữ liệu của chúng đã được
 // nạp sẵn ngay sau khi đăng nhập (xem resolveUserProfile ở trên).
-const SECTION_LOADED = { dashboard: false, drive: false, mytasks: false };
+const SECTION_LOADED = { dashboard: false, drive: false, mytasks: false, chat: false };
 
 function switchSection(name) {
   document.querySelectorAll('.app-section').forEach(el => el.classList.remove('active'));
@@ -735,8 +737,259 @@ function switchSection(name) {
   } else if (name === 'mytasks' && !SECTION_LOADED.mytasks) {
     SECTION_LOADED.mytasks = true;
     loadMyTasks();
+  } else if (name === 'chat' && !SECTION_LOADED.chat) {
+    SECTION_LOADED.chat = true;
+    loadChatMessages();
   }
 }
+
+// -------------------- Chat (Trò Chuyện) --------------------
+
+let chatChannel = null;
+let currentChatReply = null;
+let chatMessagesCache = [];
+const CHAT_EMOJI_LIST = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
+function formatChatTime(timestamp) {
+  const date = new Date(timestamp);
+  if (isNaN(date.getTime())) return '';
+  const now = new Date();
+  const timeStr = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+  if (isToday) return timeStr;
+  return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) + ', ' + timeStr;
+}
+
+function formatChatText(text) {
+  let html = escapeHtml(text);
+  html = html.replace(/@All/gi, '<span class="chat-mention-tag">@All</span>');
+  SCIENCE_MEMBERS.map(m => m.nickname).filter(Boolean).forEach(name => {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp('@' + escaped, 'gi');
+    html = html.replace(re, (m) => m.includes('<span') ? m : '<span class="chat-mention-tag">' + m + '</span>');
+  });
+  return html;
+}
+
+function renderChatMessage(msg) {
+  const list = document.getElementById('chat-messages-list');
+  if (!list) return;
+  const emptyState = list.querySelector('.empty-state');
+  if (emptyState) emptyState.remove();
+
+  const isMe = !!(CURRENT_USER.id && msg.uid === CURRENT_USER.id);
+  const isPinned = !!msg.is_pinned;
+
+  const reactions = msg.reactions || {};
+  const counts = {};
+  let myReaction = null;
+  Object.keys(reactions).forEach(uid => {
+    const icon = reactions[uid];
+    counts[icon] = (counts[icon] || 0) + 1;
+    if (uid === CURRENT_USER.id) myReaction = icon;
+  });
+  const reactionHtml = Object.keys(counts).length
+    ? '<div class="chat-reaction-bar">' + Object.keys(counts).map(icon =>
+        '<span class="chat-reaction-bubble' + (icon === myReaction ? ' is-mine' : '') + '" onclick="toggleChatReaction(\'' + msg.id + '\',\'' + icon + '\')">' + icon + ' ' + counts[icon] + '</span>'
+      ).join('') + '</div>'
+    : '';
+
+  const replyHtml = msg.reply_to
+    ? '<div class="chat-reply-quote"><strong>' + escapeHtml(msg.reply_to.name) + '</strong>' + escapeHtml(msg.reply_to.text) + '</div>'
+    : '';
+
+  const emojiButtons = CHAT_EMOJI_LIST.map(em => '<span onclick="toggleChatReaction(\'' + msg.id + '\',\'' + em + '\')">' + em + '</span>').join('');
+
+  let div = document.getElementById('chat-msg-' + msg.id);
+  if (!div) {
+    div = document.createElement('div');
+    div.id = 'chat-msg-' + msg.id;
+    list.appendChild(div);
+  }
+  div.className = 'chat-msg-row ' + (isMe ? 'is-me' : 'is-other');
+
+  const senderLabel = !isMe ? '<div class="chat-msg-sender">' + escapeHtml(msg.display_name || '') + '</div>' : '';
+  const nameArg = escapeHtml(escapeJs(msg.display_name || ''));
+  const textArg = escapeHtml(escapeJs(msg.text || ''));
+  const pinIcon = isPinned ? '<i class="fa-solid fa-thumbtack"></i> ' : '';
+
+  div.innerHTML =
+    senderLabel +
+    '<div class="chat-msg-bubble ' + (isMe ? 'is-me' : 'is-other') + (isPinned ? ' is-pinned' : '') + '">' +
+    replyHtml +
+    '<span>' + formatChatText(msg.text) + '</span>' +
+    '<span class="chat-msg-time">' + pinIcon + formatChatTime(msg.created_at) + '</span>' +
+    '</div>' +
+    reactionHtml +
+    '<div class="chat-msg-actions">' +
+    '<div class="chat-emoji-wrap">' +
+    '<button type="button" class="icon-btn chat-msg-action-btn" title="Thả cảm xúc" onclick="toggleChatEmojiPicker(\'' + msg.id + '\')"><i class="fa-regular fa-face-smile"></i></button>' +
+    '<div class="chat-emoji-popup" id="chat-emoji-' + msg.id + '">' + emojiButtons + '</div>' +
+    '</div>' +
+    '<button type="button" class="icon-btn chat-msg-action-btn" title="Trả lời" onclick="startChatReply(\'' + msg.id + '\',\'' + nameArg + '\',\'' + textArg + '\')"><i class="fa-solid fa-reply"></i></button>' +
+    '<button type="button" class="icon-btn chat-msg-action-btn" title="' + (isPinned ? 'Bỏ ghim' : 'Ghim') + '" onclick="toggleChatPin(\'' + msg.id + '\', ' + isPinned + ')"><i class="fa-solid fa-thumbtack"></i></button>' +
+    '</div>';
+}
+
+function renderChatPinnedBar() {
+  const bar = document.getElementById('chat-pinned-bar');
+  const list = document.getElementById('chat-pinned-list');
+  if (!bar || !list) return;
+  const pinned = chatMessagesCache.filter(m => m.is_pinned).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  if (!pinned.length) { bar.style.display = 'none'; list.innerHTML = ''; return; }
+  bar.style.display = 'flex';
+  list.innerHTML = pinned.map(m =>
+    '<div class="chat-pinned-item"><span><strong>' + escapeHtml(m.display_name || '') + ':</strong> ' + escapeHtml(m.text || '') + '</span>' +
+    '<button type="button" class="icon-btn chat-msg-action-btn" title="Bỏ ghim" onclick="toggleChatPin(\'' + m.id + '\', true)"><i class="fa-solid fa-xmark"></i></button></div>'
+  ).join('');
+}
+
+function toggleChatEmojiPicker(msgId) {
+  document.querySelectorAll('.chat-emoji-popup.open').forEach(el => {
+    if (el.id !== 'chat-emoji-' + msgId) el.classList.remove('open');
+  });
+  const popup = document.getElementById('chat-emoji-' + msgId);
+  if (popup) popup.classList.toggle('open');
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.chat-emoji-wrap')) {
+    document.querySelectorAll('.chat-emoji-popup.open').forEach(el => el.classList.remove('open'));
+  }
+});
+
+async function toggleChatReaction(msgId, emoji) {
+  if (!CURRENT_USER.id) return;
+  const popup = document.getElementById('chat-emoji-' + msgId);
+  if (popup) popup.classList.remove('open');
+  try {
+    const { data, error } = await sbClient.from('messages').select('reactions').eq('id', msgId).single();
+    if (error) throw error;
+    const reactions = data.reactions || {};
+    if (reactions[CURRENT_USER.id] === emoji) delete reactions[CURRENT_USER.id];
+    else reactions[CURRENT_USER.id] = emoji;
+    const { error: updateError } = await sbClient.from('messages').update({ reactions }).eq('id', msgId);
+    if (updateError) throw updateError;
+  } catch (err) {
+    console.error('Lỗi thả cảm xúc:', err);
+  }
+}
+
+function startChatReply(id, name, text) {
+  currentChatReply = { id, name, text };
+  const bar = document.getElementById('chat-reply-preview');
+  const nameEl = document.getElementById('chat-reply-name');
+  const textEl = document.getElementById('chat-reply-text');
+  if (nameEl) nameEl.textContent = 'Trả lời ' + name;
+  if (textEl) textEl.textContent = text;
+  if (bar) bar.style.display = 'flex';
+  const input = document.getElementById('chat-msg-input');
+  if (input) input.focus();
+}
+
+function cancelChatReply() {
+  currentChatReply = null;
+  const bar = document.getElementById('chat-reply-preview');
+  if (bar) bar.style.display = 'none';
+}
+
+async function toggleChatPin(msgId, currentStatus) {
+  try {
+    const { error } = await sbClient.from('messages').update({ is_pinned: !currentStatus }).eq('id', msgId);
+    if (error) throw error;
+  } catch (err) {
+    console.error('Lỗi ghim tin nhắn:', err);
+    showToast('Không thể ghim tin nhắn.', 'error');
+  }
+}
+
+async function loadChatMessages() {
+  const list = document.getElementById('chat-messages-list');
+  if (!list || !sbClient) return;
+  list.innerHTML = '<div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> Đang tải tin nhắn...</div>';
+
+  const { data, error } = await sbClient.from('messages')
+    .select('*')
+    .eq('group_key', 'science')
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (error) {
+    console.error('Lỗi tải tin nhắn:', error);
+    list.innerHTML = '<div class="empty-state">Không thể tải tin nhắn. Vui lòng thử lại sau.</div>';
+    return;
+  }
+
+  chatMessagesCache = (data || []).slice().reverse();
+  list.innerHTML = chatMessagesCache.length ? '' : '<div class="empty-state"><i class="fa-solid fa-comment-slash"></i> Chưa có tin nhắn nào. Hãy là người đầu tiên!</div>';
+  chatMessagesCache.forEach(msg => renderChatMessage(msg));
+  renderChatPinnedBar();
+  list.scrollTop = list.scrollHeight;
+
+  const input = document.getElementById('chat-msg-input');
+  const sendBtn = document.getElementById('chat-send-btn');
+  if (input) input.disabled = false;
+  if (sendBtn) sendBtn.disabled = false;
+
+  if (chatChannel) sbClient.removeChannel(chatChannel);
+  chatChannel = sbClient.channel('sci-chat-channel')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: 'group_key=eq.science' }, payload => {
+      if (payload.eventType === 'DELETE') {
+        const el = document.getElementById('chat-msg-' + payload.old.id);
+        if (el) el.remove();
+        chatMessagesCache = chatMessagesCache.filter(m => m.id !== payload.old.id);
+        renderChatPinnedBar();
+        return;
+      }
+      const msg = payload.new;
+      const idx = chatMessagesCache.findIndex(m => m.id === msg.id);
+      const wasAtBottom = (list.scrollHeight - list.scrollTop - list.clientHeight) < 80;
+      if (idx >= 0) chatMessagesCache[idx] = msg;
+      else chatMessagesCache.push(msg);
+
+      const emptyState = list.querySelector('.empty-state');
+      if (emptyState) emptyState.remove();
+      renderChatMessage(msg);
+      renderChatPinnedBar();
+
+      if (payload.eventType === 'INSERT' && wasAtBottom) list.scrollTop = list.scrollHeight;
+    })
+    .subscribe();
+}
+
+async function sendChatMessage(event) {
+  if (event) event.preventDefault();
+  const input = document.getElementById('chat-msg-input');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text || !CURRENT_USER.id) return;
+
+  const payload = {
+    text,
+    uid: CURRENT_USER.id,
+    display_name: CURRENT_USER.nickname || CURRENT_USER.email,
+    is_pinned: false,
+    group_key: 'science'
+  };
+  if (currentChatReply) {
+    payload.reply_to = { id: currentChatReply.id, name: currentChatReply.name, text: currentChatReply.text };
+  }
+
+  input.value = '';
+  cancelChatReply();
+
+  try {
+    const { error } = await sbClient.from('messages').insert(payload);
+    if (error) throw error;
+  } catch (err) {
+    console.error('Lỗi gửi tin nhắn:', err);
+    showToast('Không thể gửi tin nhắn. Vui lòng thử lại.', 'error');
+    input.value = text;
+  }
+}
+
+const chatInputForm = document.getElementById('chat-input-form');
+if (chatInputForm) chatInputForm.addEventListener('submit', sendChatMessage);
 
 // -------------------- Task render helpers --------------------
 
