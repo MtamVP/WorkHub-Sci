@@ -11,6 +11,7 @@
   <link rel="icon"
     href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='14'%20fill='%23103049'/%3E%3Ctext%20x='32'%20y='43'%20font-size='27'%20font-family='Arial'%20font-weight='bold'%20fill='%23ffffff'%20text-anchor='middle'%3ERI%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body>
@@ -154,7 +155,7 @@
 
       <div class="form-grid">
         <label>Tiêu đề<input name="title" required /></label>
-        <label>Người phụ trách<input name="owner" required /></label>
+        <label>Người phụ trách<select name="owner" id="ownerSelect"><option value="">-- Không phân công --</option></select></label>
         <label>Người đóng góp<input name="contributors" placeholder="Tên cách nhau bằng dấu phẩy" /></label>
         <label>Trạng thái
           <select name="status">
@@ -239,6 +240,7 @@
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+  <script src="../api.js?v=7"></script>
   <script src="app.js"></script>
 </body>
 

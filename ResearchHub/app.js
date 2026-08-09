@@ -40,6 +40,7 @@ function tr(value) {
 
 const state = {
   topics: [],
+  members: [],
   activeView: "overview",
   editingId: null,
   editingUpdatedAt: null,
@@ -154,6 +155,68 @@ async function pollTopics() {
   }
 }
 
+async function loadMembers() {
+  try {
+    if (typeof API === "undefined" || !API.presence) return;
+    state.members = await API.presence.getScienceMembers();
+    populateOwnerSelect();
+  } catch (error) {
+    console.warn("Lỗi tải danh sách thành viên:", error);
+  }
+}
+
+function ownerLabel(email) {
+  if (!email) return "Chưa phân công";
+  const member = state.members.find((m) => m.email === email);
+  return member ? (member.nickname || member.email) : email;
+}
+
+function populateOwnerSelect(selectedEmail = "") {
+  const select = document.querySelector("#ownerSelect");
+  if (!select) return;
+  const options = ['<option value="">-- Không phân công --</option>']
+    .concat(state.members.map((m) => `<option value="${escapeHtml(m.email)}">${escapeHtml(m.nickname || m.email)}</option>`));
+  if (selectedEmail && !state.members.some((m) => m.email === selectedEmail)) {
+    options.push(`<option value="${escapeHtml(selectedEmail)}">${escapeHtml(selectedEmail)} (không còn trong nhóm)</option>`);
+  }
+  select.innerHTML = options.join("");
+  select.value = selectedEmail || "";
+}
+
+async function ensureLinkedProject(topic) {
+  if (!topic.owner) return topic.projectId || null;
+  if (typeof sbClient === "undefined" || !sbClient) return topic.projectId || null;
+  try {
+    let projectId = topic.projectId || null;
+    if (projectId) {
+      const { data: existing } = await sbClient.from("projects").select("id").eq("id", projectId).is("deleted_at", null).maybeSingle();
+      if (!existing) projectId = null;
+    }
+    const ownerId = await getUserId(topic.owner);
+    if (!projectId) {
+      projectId = genId("PJ");
+      const { error } = await sbClient.from("projects").insert({
+        id: projectId,
+        name: topic.title,
+        owner_id: ownerId,
+        status: "Planning",
+        description: `Tự động tạo từ Research Hub — chủ đề nghiên cứu "${topic.title}".`,
+        group_key: "science"
+      });
+      if (error) throw error;
+      showToast(`Đã tự động tạo dự án "${topic.title}" trong mục Dự Án.`);
+    } else {
+      const { error } = await sbClient.from("projects").update({ name: topic.title, owner_id: ownerId }).eq("id", projectId);
+      if (error) throw error;
+    }
+    return projectId;
+  } catch (error) {
+    console.warn("Không thể tự động đồng bộ dự án liên kết:", error);
+    showToast("Đã lưu chủ đề, nhưng không thể tự động đồng bộ dự án liên kết.");
+    return topic.projectId || null;
+  }
+}
+
 async function loadWhoami() {
   try {
     const response = await fetch("/api/whoami");
@@ -186,7 +249,8 @@ function normalizeTopic(topic) {
   return {
     id: topic.id || `t${Date.now()}`,
     title: topic.title || "Chủ đề chưa đặt tên",
-    owner: topic.owner || "Chưa phân công",
+    owner: topic.owner || "",
+    projectId: topic.projectId || null,
     contributors: Array.isArray(topic.contributors) ? topic.contributors : [],
     status: topic.status || "Needs Triage",
     priority: topic.priority || "Medium",
@@ -516,7 +580,7 @@ function filteredTopics() {
   const duplicateIds = duplicateTopicIds();
   const topics = state.topics.filter((topic) => {
     const haystack = [
-      topic.title, topic.owner, topic.contributors.join(" "), topic.status, topic.priority, topic.impact,
+      topic.title, topic.owner, ownerLabel(topic.owner), topic.contributors.join(" "), topic.status, topic.priority, topic.impact,
       topic.question, topic.gap, topic.method, topic.description, topic.rationale, topic.tags.join(" "),
       topic.papers.map((paper) => Object.values(paper).join(" ")).join(" "),
       topic.actions.map((action) => Object.values(action).join(" ")).join(" "),
@@ -607,7 +671,7 @@ function renderAuxiliary() {
     const boardStages = ["Needs Triage", "Scoping", "Literature Review", "Experiment Design"];
     const board = `<div class="kanban-board">${boardStages.map((stage) => {
       const topics = state.topics.filter((topic) => topic.status === stage).sort((a, b) => topicScore(b) - topicScore(a));
-      return `<section class="kanban-column"><h3>${escapeHtml(tr(stage))}</h3>${topics.map((topic) => `<article class="kanban-card"><strong>${escapeHtml(topic.title)}</strong><small>${escapeHtml(topic.owner)} - ${topicScore(topic)}/100</small></article>`).join("") || '<p class="muted">Không có chủ đề</p>'}</section>`;
+      return `<section class="kanban-column"><h3>${escapeHtml(tr(stage))}</h3>${topics.map((topic) => `<article class="kanban-card"><strong>${escapeHtml(topic.title)}</strong><small>${escapeHtml(ownerLabel(topic.owner))} - ${topicScore(topic)}/100</small></article>`).join("") || '<p class="muted">Không có chủ đề</p>'}</section>`;
     }).join("")}</div>`;
     els.auxiliaryView.innerHTML = countCards + board;
     return;
@@ -757,7 +821,7 @@ function renderTopics() {
       <span class="badge ${escapeHtml(badgeClass(topic.impact))}">${escapeHtml(tr(topic.impact))}</span>
       ${scoreCell(topicScore(topic))}
       ${scoreCell(topic.evidence)}
-      <span class="muted">${escapeHtml(topic.owner)}</span>
+      <span class="muted">${escapeHtml(ownerLabel(topic.owner))}</span>
       <span class="link-list">${topic.papers.slice(0, 2).map((paper) => paperLink(paper)).join("") || '<span class="muted">Chưa có tài liệu</span>'}</span>
       ${actionButtons(topic.id, false, duplicateIds.has(topic.id) ? mergeButton(topic.id) : "")}
     </div>
@@ -922,6 +986,7 @@ function openEditor(id) {
   clearRows(els.decisionsList);
   document.querySelector("#dialogTitle").textContent = topic ? "Sửa chủ đề" : "Thêm chủ đề";
   document.querySelector("#deleteTopicButton").style.display = topic ? "inline-block" : "none";
+  populateOwnerSelect(topic ? topic.owner : "");
   if (topic) fillForm(topic);
   els.topicDialog.showModal();
 }
@@ -929,7 +994,6 @@ function openEditor(id) {
 function fillForm(topic) {
   const form = els.topicForm.elements;
   form.title.value = topic.title;
-  form.owner.value = topic.owner;
   form.contributors.value = topic.contributors.join(", ");
   form.status.value = topic.status;
   form.priority.value = topic.priority;
@@ -958,10 +1022,12 @@ async function saveFromForm(event) {
   event.preventDefault();
   const form = new FormData(els.topicForm);
   const isNew = !state.editingId;
+  const existingTopic = isNew ? null : state.topics.find((item) => item.id === state.editingId);
   const draft = normalizeTopic({
     id: state.editingId || `t${Date.now()}`,
     title: form.get("title"),
     owner: form.get("owner"),
+    projectId: existingTopic ? existingTopic.projectId : null,
     contributors: parseList(form.get("contributors")),
     status: form.get("status"),
     priority: form.get("priority"),
@@ -987,6 +1053,7 @@ async function saveFromForm(event) {
   const submitButton = els.topicForm.querySelector('button[type="submit"]');
   submitButton.disabled = true;
   try {
+    draft.projectId = await ensureLinkedProject(draft);
     if (isNew) {
       const saved = await createTopic(draft);
       state.topics.unshift(saved);
@@ -1053,8 +1120,9 @@ async function deleteTopic() {
 async function duplicateTopic(id) {
   const topic = state.topics.find((item) => item.id === id);
   if (!topic) return;
-  const draft = normalizeTopic({ ...structuredClone(topic), id: `t${Date.now()}`, title: `${topic.title} (bản sao)`, updatedAt: new Date().toISOString() });
+  const draft = normalizeTopic({ ...structuredClone(topic), id: `t${Date.now()}`, title: `${topic.title} (bản sao)`, projectId: null, updatedAt: new Date().toISOString() });
   try {
+    draft.projectId = await ensureLinkedProject(draft);
     const saved = await createTopic(draft);
     state.topics.unshift(saved);
     render();
@@ -1087,7 +1155,7 @@ function openDetail(id) {
         <section class="detail-section"><h3>Nhật ký quyết định</h3>${topic.decisions.map((decision) => `<div class="detail-card"><strong>${escapeHtml(decision.decision)}</strong><p class="muted">${escapeHtml(decision.reason)}</p><p class="muted">${escapeHtml(decision.evidenceUsed ? `Bằng chứng: ${decision.evidenceUsed}` : "Chưa ghi bằng chứng sử dụng")}</p><p class="muted">${escapeHtml(decision.alternatives ? `Phương án khác: ${decision.alternatives}` : "Chưa ghi phương án khác")}</p><p class="muted">${escapeHtml(decision.risk ? `Rủi ro: ${decision.risk}` : "Chưa ghi rủi ro")}</p><small class="muted">${escapeHtml([tr(decision.type), decision.reviewer || decision.by, decision.date, decision.revisit && `Xem lại ${decision.revisit}`].filter(Boolean).join(" - "))}</small></div>`).join("") || "<p>Chưa có quyết định nào.</p>"}</section>
       </div>
       <aside>
-        <section class="detail-section"><h3>Người phụ trách</h3><p>${escapeHtml(topic.owner)}</p><div class="tag-list">${topic.contributors.map((name) => `<span class="tag">${escapeHtml(name)}</span>`).join("")}</div><p class="muted">${escapeHtml(formatUpdated(topic))}</p></section>
+        <section class="detail-section"><h3>Người phụ trách</h3><p>${escapeHtml(ownerLabel(topic.owner))}</p><div class="tag-list">${topic.contributors.map((name) => `<span class="tag">${escapeHtml(name)}</span>`).join("")}</div><p class="muted">${escapeHtml(formatUpdated(topic))}</p></section>
         <section class="detail-section"><h3>Điểm số có trọng số</h3>${Object.keys(SCORE_WEIGHTS).map((key) => `<p class="score">${escapeHtml(SCORE_FIELD_LABELS[key] || key)} (${Math.round(SCORE_WEIGHTS[key] * 100)}%)<span><i style="width:${topic[key]}%"></i></span>${topic[key]}/100</p>`).join("")}</section>
         <section class="detail-section"><h3>Thẻ gắn nhãn</h3><div class="tag-list">${topic.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div></section>
         <section class="detail-section"><h3>Hành động tiếp theo</h3>${topic.actions.map((action) => `<div class="detail-card"><strong>${escapeHtml(action.title)}</strong><small class="muted">${escapeHtml([action.owner, action.due, tr(action.status)].filter(Boolean).join(" - "))}</small></div>`).join("") || "<p>Chưa có hành động nào.</p>"}</section>
@@ -1153,7 +1221,7 @@ function exportJson() {
 
 function exportCsv() {
   const rows = [["Tiêu đề","Trạng thái","Ưu tiên","Tác động","Người phụ trách","Điểm có trọng số","Tính mới","Tính khả thi","Bằng chứng","Tài trợ","Cấp thiết","Phù hợp nhóm","Câu hỏi nghiên cứu","Thẻ","Số tài liệu","Hành động đang mở","Số quyết định"]];
-  state.topics.forEach((topic) => rows.push([topic.title, tr(topic.status), tr(topic.priority), tr(topic.impact), topic.owner, topicScore(topic), topic.novelty, topic.feasibility, topic.evidence, topic.funding, topic.urgency, topic.teamFit, topic.question, topic.tags.join("; "), topic.papers.length, topic.actions.filter((action) => action.status !== "Done").length, topic.decisions.length]));
+  state.topics.forEach((topic) => rows.push([topic.title, tr(topic.status), tr(topic.priority), tr(topic.impact), ownerLabel(topic.owner), topicScore(topic), topic.novelty, topic.feasibility, topic.evidence, topic.funding, topic.urgency, topic.teamFit, topic.question, topic.tags.join("; "), topic.papers.length, topic.actions.filter((action) => action.status !== "Done").length, topic.decisions.length]));
   download("research-hub-topics.csv", rows.map((row) => row.map(csvCell).join(",")).join("\n"), "text/csv");
 }
 
@@ -1178,7 +1246,7 @@ function exportBrief() {
     lines.push(`- Trạng thái: ${tr(topic.status)}`);
     lines.push(`- Ưu tiên / tác động: ${tr(topic.priority)} / ${tr(topic.impact)}`);
     lines.push(`- Điểm có trọng số: ${topicScore(topic)}/100`);
-    lines.push(`- Người phụ trách: ${topic.owner}`);
+    lines.push(`- Người phụ trách: ${ownerLabel(topic.owner)}`);
     lines.push(`- Câu hỏi nghiên cứu: ${topic.question}`);
     lines.push(`- Khoảng trống tri thức: ${topic.gap || "Chưa ghi"}`);
     lines.push(`- Lý do chấm điểm: ${topic.rationale || "Chưa ghi"}`);
@@ -1280,7 +1348,7 @@ async function importReferences(papers, title) {
   const draft = normalizeTopic({
     id: `t${Date.now()}`,
     title,
-    owner: "Đã nhập",
+    owner: "",
     status: "Needs Triage",
     priority: "Medium",
     impact: "Medium",
@@ -1445,6 +1513,7 @@ async function init() {
   }
   render();
   loadWhoami();
+  loadMembers();
   window.setInterval(pollTopics, 7000);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") pollTopics();
