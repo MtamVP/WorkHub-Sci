@@ -881,6 +881,7 @@ const API = {
                     description: f.description,
                     folderPath: folderPath,
                     projectId: f.project_id,
+                    taskId: f.task_id,
                     uploader: f.users ? f.users.email : 'Unknown',
                     date: new Date(f.created_at).toLocaleString('vi-VN'),
                     url: `${SUPABASE_URL}/storage/v1/object/public/${f.storage_path}`,
@@ -903,7 +904,7 @@ const API = {
         getRecentFilesForDashboard: async (groupKey) => {
             return API.file.list(groupKey, {});
         },
-        upload: async (fileData, fileName, mimeType, groupKey, description, uploaderEmail, folderPath = "", projectId = null) => {
+        upload: async (fileData, fileName, mimeType, groupKey, description, uploaderEmail, folderPath = "", projectId = null, taskId = null) => {
             if (!sbClient) throw new Error("Supabase chưa được cấu hình.");
 
             if (fileData.includes('base64,')) fileData = fileData.split('base64,')[1];
@@ -929,7 +930,8 @@ const API = {
                 uploader_id: uploaderId,
                 group_key: groupKey,
                 description: description || '',
-                project_id: projectId || null
+                project_id: projectId || null,
+                task_id: taskId || null
             });
 
             if (dbError) throw dbError;
@@ -1799,7 +1801,7 @@ window.callGAS = async function(action, params = {}) {
             case 'getRecentFilesForDashboard': result = await API.file.getRecentFilesForDashboard(params.groupKey); break;
             case 'getFileList': result = await API.file.list(params.groupKey, params); break;
             case 'deleteFile': result = await API.file.delete(params.fileId, params.groupKey); break;
-            case 'uploadFile': result = await API.file.upload(params.fileData, params.fileName, params.mimeType, params.groupKey, params.description, params.email, params.folderPath, params.projectId); break;
+            case 'uploadFile': result = await API.file.upload(params.fileData, params.fileName, params.mimeType, params.groupKey, params.description, params.email, params.folderPath, params.projectId, params.taskId); break;
             case 'shareFile': result = await API.file.share(params.fileId, params.groupKey); break;
 
             case 'getEvents': result = await API.calendar.getEvents(params.startDate, params.endDate, params.calendarType, params.groupKey, params.email); break;
