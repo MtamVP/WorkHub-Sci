@@ -402,7 +402,53 @@
         </div>
       </div>
 
-      <div class="card" style="padding: 18px 20px;">
+      <div class="card" id="task-project-manager-card" style="padding: 16px 20px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" onclick="toggleProjectManagerPanel()">
+          <h4 style="margin:0; font-size:14px; display:flex; align-items:center; gap:8px;">
+            <i class="fa-solid fa-diagram-project"></i> Quản Lý Dự Án
+            <span id="task-project-manager-count" class="status-pill pill-info" style="font-size:10px;">0</span>
+          </h4>
+          <button type="button" class="icon-btn" id="task-project-manager-toggle-btn" title="Thu gọn/Mở rộng" onclick="event.stopPropagation(); toggleProjectManagerPanel();">
+            <i class="fa-solid fa-chevron-up"></i>
+          </button>
+        </div>
+        <div id="task-project-manager-body" style="margin-top: 14px;">
+          <div class="filter-bar">
+            <div class="form-group">
+              <label class="form-label">Trạng thái dự án</label>
+              <select id="task-project-status-filter" class="form-select" onchange="renderProjectManagerList()">
+                <option value="">-- Tất cả trạng thái --</option>
+                <option value="Planning">Planning</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+                <option value="On Hold">On Hold</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Tìm kiếm dự án</label>
+              <input type="text" id="task-project-search" class="form-control" placeholder="Tên dự án..." oninput="renderProjectManagerList()">
+            </div>
+          </div>
+          <div class="table-container" style="margin-top: 12px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 34%;">Dự án</th>
+                  <th style="width: 16%;">Trạng thái</th>
+                  <th style="width: 16%;">Tiến độ</th>
+                  <th style="width: 20%;">Cập nhật</th>
+                  <th style="width: 14%; text-align:center;">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="task-project-manager-body-list">
+                <tr><td colspan="5" class="empty-state">Đang tải...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 18px 20px; margin-top: 16px;">
         <div class="filter-bar">
           <div class="form-group">
             <label class="form-label">Dự án</label>
@@ -464,14 +510,22 @@
       <div class="card" id="task-project-files-card" style="padding: 16px 20px; margin-top: 16px; display: none;">
         <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" onclick="toggleProjectFilesPanel()">
           <h4 style="margin:0; font-size:14px; display:flex; align-items:center; gap:8px;">
-            <i class="fa-solid fa-paperclip"></i> Tệp đính kèm của dự án
+            <i class="fa-solid fa-folder-open"></i> Tệp Của Dự Án
             <span id="task-project-files-count" class="status-pill pill-info" style="font-size:10px;">0</span>
           </h4>
           <button type="button" class="icon-btn" id="task-project-files-toggle-btn" title="Thu gọn/Mở rộng" onclick="event.stopPropagation(); toggleProjectFilesPanel();">
             <i class="fa-solid fa-chevron-up"></i>
           </button>
         </div>
-        <div class="task-attachment-list" id="task-project-files-list" style="margin-top: 12px;"></div>
+        <div id="task-project-files-body" style="margin-top: 12px;">
+          <div style="display:flex; align-items:center; gap: 10px; margin-bottom: 12px;">
+            <input type="file" id="task-project-file-input" style="display:none;" onchange="handleProjectFileUpload()">
+            <button type="button" class="btn btn-outline" id="task-project-file-upload-btn" onclick="document.getElementById('task-project-file-input').click()">
+              <i class="fa-solid fa-upload"></i> Tải file lên dự án
+            </button>
+          </div>
+          <div class="task-attachment-list" id="task-project-files-list"></div>
+        </div>
       </div>
 
       <div id="bulk-action-bar" class="bulk-action-bar" style="display: none;">
@@ -1267,7 +1321,7 @@
     </div>
   </div>
 
-  <script src="api.js?v=8"></script>
-  <script src="script.js?v=17"></script>
+  <script src="api.js?v=9"></script>
+  <script src="script.js?v=18"></script>
 </body>
 </html>
