@@ -861,7 +861,9 @@ const API = {
             if (!sbClient) return [];
             let query = sbClient.from('files').select('*, users!uploader_id(email)').is('deleted_at', null).order('created_at', { ascending: false }).limit(500);
             if (groupKey === 'all') {
-                query = query.or('group_key.eq.all,is_shared.eq.true');
+                // Cùng lý do như project.list(): admin xem trực tiếp trong Sci chỉ nên thấy
+                // file CỦA Sci, không kéo theo file share từ Fin hay file riêng của ORG.
+                query = query.in('group_key', ['science', 'workhub-sci']);
             } else {
                 query = query.eq('group_key', groupKey);
             }
@@ -923,6 +925,9 @@ const API = {
             const filePath = `${fileId}_${safeFileName}`;
             const bucketName = groupKey === 'finance' ? 'finance_bucket' :
                 (groupKey === 'science' ? 'science_bucket' : 'general_bucket');
+            // Admin tải file trực tiếp trong Sci ('all') vẫn phải là file của Sci, không stamp
+            // thẳng 'all' (cùng lý do như project.create()).
+            const effectiveGroupKey = groupKey === 'all' ? 'workhub-sci' : groupKey;
 
             const fullStoragePath = `bronze/${folderPath ? folderPath + '/' : ''}${filePath}`;
 
@@ -936,7 +941,7 @@ const API = {
                 storage_path: `${bucketName}/${fullStoragePath}`,
                 mime_type: mimeType,
                 uploader_id: uploaderId,
-                group_key: groupKey,
+                group_key: effectiveGroupKey,
                 description: description || '',
                 project_id: projectId || null,
                 task_id: taskId || null
