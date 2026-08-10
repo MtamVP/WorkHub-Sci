@@ -4937,6 +4937,7 @@ function renderJournalList() {
         <button type="button" class="icon-btn" title="Sửa" onclick="openJournalEditor('${j.id}')"><i class="fa-solid fa-pen"></i></button>
         <button type="button" class="icon-btn" title="Nhân bản" onclick="duplicateJournalAction('${j.id}')"><i class="fa-solid fa-copy"></i></button>
         <button type="button" class="icon-btn" title="Xuất .tex" onclick="exportJournalTexById('${j.id}')"><i class="fa-solid fa-file-export"></i></button>
+        <button type="button" class="icon-btn" title="Mở trong Overleaf (biên dịch ra PDF)" onclick="openJournalInOverleafById('${j.id}')"><i class="fa-solid fa-file-pdf"></i></button>
         <button type="button" class="icon-btn" title="Xóa" onclick="deleteJournalAction('${j.id}', '${escapeHtml(escapeJsAttr(j.title || ''))}')"><i class="fa-solid fa-trash"></i></button>
       </td>
     </tr>
@@ -5153,6 +5154,72 @@ function exportCurrentJournalTex() {
     return;
   }
   downloadJournalTex(journalData);
+}
+
+// -------------------- Mở trong Overleaf (biên dịch PDF, không cần hạ tầng riêng) --------------------
+// Dùng "Open in Overleaf" API chính thức của Overleaf (https://www.overleaf.com/devs):
+// POST form tới /docs với snip/snip_name chứa thẳng nội dung .tex -- không cần host file ở
+// đâu cả vì nội dung được sinh động ngay trên trình duyệt. Lưu ý quan trọng (xác nhận bằng
+// test thật): Overleaf hiện KHÔNG còn nhận snippet ẩn danh nữa -- nếu người bấm nút chưa
+// đăng nhập Overleaf sẵn, /docs sẽ chuyển thẳng sang trang login và nội dung bị mất luôn
+// (không giữ lại để dùng sau khi đăng nhập). Vì vậy luôn cảnh báo trước khi gửi.
+async function openInOverleaf(texContent, filename) {
+  const result = await Swal.fire({
+    title: 'Mở trong Overleaf?',
+    html: 'Bạn cần <b>đã đăng nhập sẵn Overleaf</b> ở trình duyệt này (mở overleaf.com ở tab khác và đăng nhập trước nếu chưa có).<br><small style="color: var(--text-muted);">Overleaf hiện không nhận nội dung ẩn danh -- nếu chưa đăng nhập, trang sẽ chuyển sang màn hình đăng nhập của Overleaf và nội dung bài báo sẽ bị mất, phải quay lại bấm nút này lần nữa sau khi đăng nhập.</small>',
+    icon: 'info',
+    showCancelButton: true,
+    confirmButtonColor: 'var(--cyan-accent)',
+    cancelButtonColor: 'var(--text-muted)',
+    confirmButtonText: 'Tôi đã đăng nhập, mở luôn',
+    cancelButtonText: 'Để sau'
+  });
+  if (!result.isConfirmed) return;
+
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = 'https://www.overleaf.com/docs';
+  form.target = '_blank';
+
+  const snip = document.createElement('input');
+  snip.type = 'hidden';
+  snip.name = 'snip';
+  snip.value = texContent;
+  form.appendChild(snip);
+
+  const snipName = document.createElement('input');
+  snipName.type = 'hidden';
+  snipName.name = 'snip_name';
+  snipName.value = filename || 'main.tex';
+  form.appendChild(snipName);
+
+  document.body.appendChild(form);
+  form.submit();
+  document.body.removeChild(form);
+}
+
+async function openJournalInOverleafById(id) {
+  try {
+    const j = await API.journal.get(id);
+    if (!j) { showToast('Không tìm thấy bài báo.', 'error'); return; }
+    const tex = generateLatexDocument({
+      title: j.title, authors: j.authors, docDate: j.doc_date, abstract: j.abstract,
+      introduction: j.introduction, methods: j.methods, results: j.results,
+      discussion: j.discussion, conclusion: j.conclusion, referencesText: j.references_text
+    });
+    await openInOverleaf(tex, 'main.tex');
+  } catch (error) {
+    showToast('Lỗi mở Overleaf: ' + (error.message || error), 'error');
+  }
+}
+
+async function openCurrentJournalInOverleaf() {
+  const journalData = readJournalFormFields();
+  if (!journalData.title.trim()) {
+    showToast('Vui lòng nhập tiêu đề trước khi mở.', 'error');
+    return;
+  }
+  await openInOverleaf(generateLatexDocument(journalData), 'main.tex');
 }
 
 // -------------------- Xuất Journal ra LaTeX (.tex) --------------------
