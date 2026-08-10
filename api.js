@@ -1677,6 +1677,80 @@ const API = {
             if (error) throw error;
             return { success: true };
         }
+    },
+
+    journal: {
+        list: async (groupKey, searchName = "") => {
+            if (!sbClient) return [];
+            let query = sbClient.from('sci_journals').select('*, users!owner_id(nickname)')
+                .is('deleted_at', null).order('updated_at', { ascending: false }).limit(300);
+            if (groupKey !== 'all') query = query.eq('group_key', groupKey);
+            if (searchName) query = query.ilike('title', `%${searchName}%`);
+            const { data, error } = await query;
+            if (error) throw error;
+            return (data || []).map(j => ({
+                id: j.id, title: j.title, authors: j.authors, docDate: j.doc_date,
+                owner: j.users ? (j.users.nickname || '') : '', updatedAt: j.updated_at
+            }));
+        },
+
+        get: async (id) => {
+            const { data, error } = await sbClient.from('sci_journals').select('*').eq('id', id).maybeSingle();
+            if (error) throw error;
+            return data;
+        },
+
+        create: async (journalData, groupKey, email) => {
+            const id = genId('JR');
+            const ownerId = await getUserId(email);
+            const { error } = await sbClient.from('sci_journals').insert({
+                id, title: journalData.title, authors: journalData.authors || '',
+                doc_date: journalData.docDate || new Date().toISOString().slice(0, 10),
+                abstract: journalData.abstract || '', introduction: journalData.introduction || '',
+                methods: journalData.methods || '', results: journalData.results || '',
+                discussion: journalData.discussion || '', conclusion: journalData.conclusion || '',
+                references_text: journalData.referencesText || '',
+                owner_id: ownerId, group_key: groupKey
+            });
+            if (error) throw error;
+            return `Đã tạo bài báo "${journalData.title}"!`;
+        },
+
+        update: async (id, journalData) => {
+            const { data, error } = await sbClient.from('sci_journals').update({
+                updated_at: new Date().toISOString(),
+                title: journalData.title, authors: journalData.authors || '', doc_date: journalData.docDate,
+                abstract: journalData.abstract || '', introduction: journalData.introduction || '',
+                methods: journalData.methods || '', results: journalData.results || '',
+                discussion: journalData.discussion || '', conclusion: journalData.conclusion || '',
+                references_text: journalData.referencesText || ''
+            }).eq('id', id).select('title').maybeSingle();
+            if (error) throw error;
+            return `Đã cập nhật bài báo "${data.title}"!`;
+        },
+
+        duplicate: async (id, groupKey, email) => {
+            const { data: src, error: fErr } = await sbClient.from('sci_journals').select('*').eq('id', id).maybeSingle();
+            if (fErr) throw fErr;
+            if (!src) throw new Error('Không tìm thấy bài báo gốc.');
+            const newId = genId('JR');
+            const ownerId = await getUserId(email);
+            const { error } = await sbClient.from('sci_journals').insert({
+                id: newId, title: src.title + ' (Bản sao)', authors: src.authors, doc_date: src.doc_date,
+                abstract: src.abstract, introduction: src.introduction, methods: src.methods,
+                results: src.results, discussion: src.discussion, conclusion: src.conclusion,
+                references_text: src.references_text, owner_id: ownerId, group_key: groupKey
+            });
+            if (error) throw error;
+            return `Đã nhân bản bài báo "${src.title}"!`;
+        },
+
+        delete: async (id) => {
+            const { data, error } = await sbClient.from('sci_journals')
+                .update({ deleted_at: new Date().toISOString() }).eq('id', id).select('title').maybeSingle();
+            if (error) throw error;
+            return `Đã đưa "${data.title}" vào thùng rác!`;
+        }
     }
 };
 
@@ -1687,6 +1761,7 @@ const MUTATING_ACTIONS = new Set([
     'addChecklistItem', 'toggleChecklistItem', 'deleteChecklistItem',
     'createProject', 'updateProject', 'shareProject', 'deleteProject', 'setProjectArchived',
     'addMilestone', 'toggleMilestone', 'deleteMilestone',
+    'createJournal', 'updateJournal', 'duplicateJournal', 'deleteJournal',
     'createEvent', 'updateEvent', 'deleteEvent', 'toggleImportant',
     'uploadFile', 'deleteFile', 'shareFile',
     'restoreItem', 'hardDeleteItem',
@@ -1740,6 +1815,13 @@ window.callGAS = async function(action, params = {}) {
             case 'toggleMilestone': result = await API.project.toggleMilestone(params.milestoneId, params.isDone); break;
             case 'deleteMilestone': result = await API.project.deleteMilestone(params.milestoneId); break;
             case 'getBurndownData': result = await API.project.getBurndownData(params.projectId); break;
+
+            case 'getJournalList': result = await API.journal.list(params.groupKey, params.searchName); break;
+            case 'getJournal': result = await API.journal.get(params.id); break;
+            case 'createJournal': result = await API.journal.create(params, params.groupKey, params.email); break;
+            case 'updateJournal': result = await API.journal.update(params.id, params); break;
+            case 'duplicateJournal': result = await API.journal.duplicate(params.id, params.groupKey, params.email); break;
+            case 'deleteJournal': result = await API.journal.delete(params.id); break;
 
             case 'getTaskList': result = await API.task.list(params.projectId, params.groupKey); break;
             case 'listMyTasks': result = await API.task.listMine(params.email, params.groupKey); break;

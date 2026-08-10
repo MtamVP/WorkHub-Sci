@@ -724,12 +724,12 @@ function skeletonListItems(count) {
 
 // -------------------- Section navigation (Tổng Quan / Pipeline / Task / Progress / Calendar / Drive / My Tasks) --------------------
 
-const SECTION_KEYS = ['dashboard', 'chat', 'pipeline', 'task', 'progress', 'calendar', 'drive', 'mytasks'];
+const SECTION_KEYS = ['dashboard', 'chat', 'pipeline', 'journal', 'task', 'progress', 'calendar', 'drive', 'mytasks'];
 
 // Cờ tải-một-lần cho các section được nạp lười (chỉ gọi API lần đầu ghé thăm).
 // Pipeline/Task/Progress/Calendar không có mặt ở đây vì dữ liệu của chúng đã được
 // nạp sẵn ngay sau khi đăng nhập (xem resolveUserProfile ở trên).
-const SECTION_LOADED = { dashboard: false, drive: false, mytasks: false, chat: false };
+const SECTION_LOADED = { dashboard: false, drive: false, mytasks: false, chat: false, journal: false };
 
 function switchSection(name) {
   document.querySelectorAll('.app-section').forEach(el => el.classList.remove('active'));
@@ -752,6 +752,9 @@ function switchSection(name) {
   } else if (name === 'chat' && !SECTION_LOADED.chat) {
     SECTION_LOADED.chat = true;
     loadChatMessages();
+  } else if (name === 'journal' && !SECTION_LOADED.journal) {
+    SECTION_LOADED.journal = true;
+    loadJournalList();
   }
 }
 
@@ -4559,6 +4562,8 @@ async function restoreItemClick(category, id) {
         }
       } else if (category === 'events' && typeof loadCalendarData === 'function') {
         loadCalendarData({ quiet: true });
+      } else if (category === 'sci_journals' && typeof loadJournalList === 'function') {
+        loadJournalList({ quiet: true });
       }
     } else {
       showToast('Khôi phục thất bại: ' + response.message, 'error');
@@ -4592,4 +4597,318 @@ async function hardDeleteItemClick(category, id) {
   } catch (e) {
     showToast('Lỗi: ' + e.message, 'error');
   }
+}
+
+// -------------------- Journal (Bài báo khoa học) --------------------
+
+let JOURNAL_LIST_CACHE = [];
+
+async function loadJournalList(options) {
+  const quiet = !!(options && options.quiet);
+  const tbody = document.getElementById('journal-list-body');
+  if (!tbody) return;
+
+  if (!quiet) tbody.innerHTML = skeletonTableRows(5, 4);
+
+  try {
+    JOURNAL_LIST_CACHE = await API.journal.list(CURRENT_USER.groupKey);
+    renderJournalList();
+  } catch (error) {
+    console.error('Lỗi tải danh sách bài báo:', error);
+    if (!quiet) {
+      tbody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color: var(--danger-color);">Lỗi: ${escapeHtml(error.message || String(error))}</td></tr>`;
+    } else {
+      showToast('Lỗi tải danh sách bài báo: ' + (error.message || error), 'error');
+    }
+  }
+}
+
+function renderJournalList() {
+  const tbody = document.getElementById('journal-list-body');
+  if (!tbody) return;
+
+  const query = (document.getElementById('journal-search')?.value || '').trim().toLowerCase();
+  const items = query
+    ? JOURNAL_LIST_CACHE.filter(j => (j.title || '').toLowerCase().includes(query))
+    : JOURNAL_LIST_CACHE;
+
+  if (!items.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">${query ? 'Không tìm thấy bài báo phù hợp.' : 'Chưa có bài báo nào. Bấm "Bài báo mới" để bắt đầu.'}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = items.map(j => `
+    <tr>
+      <td>${escapeHtml(j.title || '')}</td>
+      <td>${escapeHtml(j.authors || '')}</td>
+      <td>${escapeHtml(fmtDateVN(j.docDate))}</td>
+      <td>${escapeHtml(fmtDateVN(j.updatedAt))}</td>
+      <td>
+        <button type="button" class="icon-btn" title="Sửa" onclick="openJournalEditor('${j.id}')"><i class="fa-solid fa-pen"></i></button>
+        <button type="button" class="icon-btn" title="Nhân bản" onclick="duplicateJournalAction('${j.id}')"><i class="fa-solid fa-copy"></i></button>
+        <button type="button" class="icon-btn" title="Xuất .tex" onclick="exportJournalTexById('${j.id}')"><i class="fa-solid fa-file-export"></i></button>
+        <button type="button" class="icon-btn" title="Xóa" onclick="deleteJournalAction('${j.id}', '${escapeHtml(escapeJsAttr(j.title || ''))}')"><i class="fa-solid fa-trash"></i></button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function fmtDateVN(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('vi-VN');
+}
+
+function escapeJsAttr(str) {
+  return String(str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+}
+
+function resetJournalModalUI() {
+  const form = document.getElementById('journal-form');
+  if (form) form.reset();
+  const idInput = document.getElementById('journal-id');
+  if (idInput) idInput.value = '';
+}
+
+async function openJournalEditor(id) {
+  resetJournalModalUI();
+  if (!id) {
+    document.getElementById('journal-date').value = new Date().toISOString().slice(0, 10);
+    openAppModal('journal-modal');
+    return;
+  }
+  try {
+    const j = await API.journal.get(id);
+    if (!j) { showToast('Không tìm thấy bài báo.', 'error'); return; }
+    document.getElementById('journal-id').value = j.id;
+    document.getElementById('journal-title').value = j.title || '';
+    document.getElementById('journal-authors').value = j.authors || '';
+    document.getElementById('journal-date').value = j.doc_date || '';
+    document.getElementById('journal-abstract').value = j.abstract || '';
+    document.getElementById('journal-intro').value = j.introduction || '';
+    document.getElementById('journal-methods').value = j.methods || '';
+    document.getElementById('journal-results').value = j.results || '';
+    document.getElementById('journal-discussion').value = j.discussion || '';
+    document.getElementById('journal-conclusion').value = j.conclusion || '';
+    document.getElementById('journal-references').value = j.references_text || '';
+    openAppModal('journal-modal');
+  } catch (error) {
+    showToast('Lỗi tải bài báo: ' + (error.message || error), 'error');
+  }
+}
+
+function readJournalFormFields() {
+  return {
+    id: document.getElementById('journal-id').value,
+    title: document.getElementById('journal-title').value,
+    authors: document.getElementById('journal-authors').value,
+    docDate: document.getElementById('journal-date').value,
+    abstract: document.getElementById('journal-abstract').value,
+    introduction: document.getElementById('journal-intro').value,
+    methods: document.getElementById('journal-methods').value,
+    results: document.getElementById('journal-results').value,
+    discussion: document.getElementById('journal-discussion').value,
+    conclusion: document.getElementById('journal-conclusion').value,
+    referencesText: document.getElementById('journal-references').value
+  };
+}
+
+async function handleJournalFormSubmit(e) {
+  if (e) e.preventDefault();
+
+  const form = document.getElementById('journal-form');
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const journalData = readJournalFormFields();
+
+  if (!journalData.title.trim()) {
+    showToast('Vui lòng nhập tiêu đề bài báo.', 'error');
+    return;
+  }
+
+  const originalText = submitBtn.innerHTML;
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu...';
+
+  try {
+    const action = journalData.id ? 'updateJournal' : 'createJournal';
+    const response = await callGAS(action, { ...journalData, groupKey: CURRENT_USER.groupKey, email: CURRENT_USER.email });
+
+    if (response.status === 'success') {
+      showToast(response.message || 'Đã lưu bài báo.', 'success');
+      closeAppModal('journal-modal');
+      resetJournalModalUI();
+      loadJournalList({ quiet: true });
+    } else {
+      showToast('Lỗi: ' + response.message, 'error');
+    }
+  } catch (err) {
+    console.error('Lỗi lưu bài báo:', err);
+    showToast('Lỗi hệ thống: ' + (err.message || err), 'error');
+  } finally {
+    submitBtn.innerHTML = originalText;
+    submitBtn.disabled = false;
+  }
+}
+
+async function duplicateJournalAction(id) {
+  try {
+    const response = await callGAS('duplicateJournal', { id, groupKey: CURRENT_USER.groupKey, email: CURRENT_USER.email });
+    if (response.status === 'success') {
+      showToast(response.message || 'Đã nhân bản bài báo.', 'success');
+      loadJournalList({ quiet: true });
+    } else {
+      showToast('Lỗi: ' + response.message, 'error');
+    }
+  } catch (error) {
+    showToast('Lỗi: ' + (error.message || error), 'error');
+  }
+}
+
+function deleteJournalAction(id, title) {
+  Swal.fire({
+    title: 'Xóa Bài Báo?',
+    text: `Bạn có chắc chắn muốn xóa bài báo: "${title}"?`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: 'var(--danger-color)',
+    cancelButtonColor: 'var(--text-muted)',
+    confirmButtonText: 'Xóa',
+    cancelButtonText: 'Hủy'
+  }).then(async (result) => {
+    if (!result.isConfirmed) return;
+    try {
+      const response = await callGAS('deleteJournal', { id, groupKey: CURRENT_USER.groupKey });
+      if (response.status === 'success') {
+        showToast(response.message || 'Đã xóa bài báo.', 'success');
+        loadJournalList({ quiet: true });
+      } else {
+        showToast('Lỗi: ' + response.message, 'error');
+      }
+    } catch (error) {
+      showToast('Lỗi: ' + (error.message || error), 'error');
+    }
+  });
+}
+
+async function exportJournalTexById(id) {
+  try {
+    const j = await API.journal.get(id);
+    if (!j) { showToast('Không tìm thấy bài báo.', 'error'); return; }
+    downloadJournalTex({
+      title: j.title, authors: j.authors, docDate: j.doc_date, abstract: j.abstract,
+      introduction: j.introduction, methods: j.methods, results: j.results,
+      discussion: j.discussion, conclusion: j.conclusion, referencesText: j.references_text
+    });
+  } catch (error) {
+    showToast('Lỗi xuất .tex: ' + (error.message || error), 'error');
+  }
+}
+
+function exportCurrentJournalTex() {
+  const journalData = readJournalFormFields();
+  if (!journalData.title.trim()) {
+    showToast('Vui lòng nhập tiêu đề trước khi xuất.', 'error');
+    return;
+  }
+  downloadJournalTex(journalData);
+}
+
+// -------------------- Xuất Journal ra LaTeX (.tex) --------------------
+
+function downloadTextFile(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function slugify(str) {
+  return String(str || 'untitled')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip diacritics
+    .replace(/đ/gi, 'd')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60) || 'untitled';
+}
+
+// LaTeX text-mode special characters. A single regex pass with a lookup table
+// (not chained .replace() calls) so the backslash inserted for one character
+// is never re-scanned and re-escaped by a later replacement in the chain.
+function escapeLatex(str) {
+  if (str === null || str === undefined) return '';
+  const map = {
+    '\\': '\\textbackslash{}',
+    '{': '\\{',
+    '}': '\\}',
+    '$': '\\$',
+    '&': '\\&',
+    '#': '\\#',
+    '^': '\\textasciicircum{}',
+    '_': '\\_',
+    '~': '\\textasciitilde{}',
+    '%': '\\%'
+  };
+  return String(str).replace(/\r\n/g, '\n').replace(/[\\{}$&#^_~%]/g, ch => map[ch]);
+}
+
+function generateLatexDocument(j) {
+  const authorList = (j.authors || '').split(',').map(a => a.trim()).filter(Boolean)
+    .map(escapeLatex).join(' \\and ');
+
+  const sections = [
+    ['Giới thiệu', j.introduction],
+    ['Phương pháp', j.methods],
+    ['Kết quả', j.results],
+    ['Thảo luận', j.discussion],
+    ['Kết luận', j.conclusion]
+  ];
+
+  let body = '';
+  for (const [heading, content] of sections) {
+    if (content && content.trim()) {
+      body += `\\section{${escapeLatex(heading)}}\n${escapeLatex(content.trim())}\n\n`;
+    }
+  }
+
+  let bibliography = '';
+  const refLines = (j.referencesText || '').split('\n').map(l => l.trim()).filter(Boolean);
+  if (refLines.length) {
+    bibliography = '\\begin{thebibliography}{99}\n' +
+      refLines.map((line, i) => `\\bibitem{ref${i + 1}} ${escapeLatex(line)}`).join('\n') +
+      '\n\\end{thebibliography}\n\n';
+  }
+
+  return `\\documentclass[12pt,a4paper]{article}
+\\usepackage[utf8]{vietnam}
+\\usepackage[a4paper,margin=2.5cm]{geometry}
+\\usepackage{amsmath,amssymb}
+\\usepackage{graphicx}
+\\usepackage{hyperref}
+
+\\title{${escapeLatex(j.title || 'Untitled')}}
+\\author{${authorList}}
+\\date{${escapeLatex(j.docDate || '')}}
+
+\\begin{document}
+\\maketitle
+
+\\begin{abstract}
+${escapeLatex((j.abstract || '').trim())}
+\\end{abstract}
+
+${body}${bibliography}\\end{document}
+`;
+}
+
+function downloadJournalTex(journalData) {
+  const tex = generateLatexDocument(journalData);
+  downloadTextFile(`journal-${slugify(journalData.title)}-${stamp()}.tex`, tex, 'application/x-tex;charset=utf-8;');
+  showToast('Đã xuất file .tex!', 'success');
 }

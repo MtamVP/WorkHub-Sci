@@ -91,6 +91,9 @@
         <li class="nav-item" data-section="pipeline" onclick="switchSection('pipeline')" title="Pipeline">
           <i class="fa-solid fa-diagram-project"></i><span> Pipeline</span>
         </li>
+        <li class="nav-item" data-section="journal" onclick="switchSection('journal')" title="Journal Khoa Học">
+          <i class="fa-solid fa-scroll"></i><span> Journal Khoa Học</span>
+        </li>
         <li class="nav-item" onclick="window.top.location.href='/ResearchHub/'" title="Tài liệu Nghiên Cứu">
           <i class="fa-solid fa-book"></i><span> Tài liệu Nghiên Cứu</span>
         </li>
@@ -285,6 +288,44 @@
       </div>
     </section>
 
+    </section>
+
+    <!-- ================= JOURNAL SECTION ("Journal Khoa Học") ================= -->
+    <section class="app-section" id="journal-section">
+      <div class="section-hero-card card">
+        <div class="section-hero-info">
+          <h3><i class="fa-solid fa-scroll" style="color: var(--cyan-accent);"></i> Journal Khoa Học</h3>
+          <p>Viết bài báo khoa học và tự động chuyển sang định dạng LaTeX (.tex) chuẩn.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="filter-bar">
+          <div class="form-group">
+            <label class="form-label" for="journal-search">Tìm theo tiêu đề</label>
+            <input type="text" id="journal-search" class="form-control" placeholder="Nhập tiêu đề bài báo..." oninput="renderJournalList()">
+          </div>
+          <div class="form-group" style="flex: 0 0 auto;">
+            <label class="form-label">&nbsp;</label>
+            <button type="button" class="btn btn-primary" onclick="openJournalEditor()"><i class="fa-solid fa-plus"></i> Bài báo mới</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Tiêu đề</th>
+              <th>Tác giả</th>
+              <th>Ngày</th>
+              <th>Cập nhật</th>
+              <th>Hành động</th>
+            </tr>
+          </thead>
+          <tbody id="journal-list-body"><tr><td colspan="5" class="empty-state">Đang tải danh sách bài báo...</td></tr></tbody>
+        </table>
+      </div>
     </section>
 
     <!-- ================= TASK SECTION ("Nhiệm Vụ") ================= -->
@@ -906,6 +947,77 @@
     </div>
   </div>
 
+  <!-- Journal Modal (Viết / Sửa bài báo khoa học) -->
+  <div class="modal-overlay" id="journal-modal">
+    <div class="modal-card" style="max-width: 720px;">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-scroll" style="color: var(--cyan-accent);"></i> Viết / Sửa Bài Báo</h3>
+        <button class="header-btn" onclick="closeAppModal('journal-modal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <form id="journal-form" onsubmit="handleJournalFormSubmit(event)">
+          <input type="hidden" id="journal-id">
+
+          <div class="form-group">
+            <label class="form-label">Tiêu đề</label>
+            <input type="text" id="journal-title" class="form-control" placeholder="Ví dụ: Cơ chế α-glucosidase trong kiểm soát đường huyết sau ăn" required>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label class="form-label">Tác giả (ngăn cách bằng dấu phẩy)</label>
+              <input type="text" id="journal-authors" class="form-control" placeholder="Nguyễn Văn A, Trần Thị B">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Ngày</label>
+              <input type="date" id="journal-date" class="form-control">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Tóm tắt (Abstract)</label>
+            <textarea id="journal-abstract" class="form-control" rows="3"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Giới thiệu (Introduction)</label>
+            <textarea id="journal-intro" class="form-control" rows="4"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Phương pháp (Methods)</label>
+            <textarea id="journal-methods" class="form-control" rows="4"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Kết quả (Results)</label>
+            <textarea id="journal-results" class="form-control" rows="4"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Thảo luận (Discussion)</label>
+            <textarea id="journal-discussion" class="form-control" rows="4"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Kết luận (Conclusion)</label>
+            <textarea id="journal-conclusion" class="form-control" rows="4"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Tài liệu tham khảo (mỗi dòng 1 tài liệu)</label>
+            <textarea id="journal-references" class="form-control" rows="4" placeholder="Nguyen, V. A. et al. (2025). Tên bài báo. Tên tạp chí, 12(3), 45-60."></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeAppModal('journal-modal')">Hủy</button>
+        <button type="button" class="btn btn-secondary" onclick="exportCurrentJournalTex()"><i class="fa-solid fa-file-export"></i> Xuất .tex</button>
+        <button type="submit" form="journal-form" class="btn btn-primary">Lưu Bài Báo</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Task Activity Modal (Bình luận / Danh sách kiểm / Đính kèm / Lịch sử) -->
   <div class="modal-overlay" id="task-activity-modal">
     <div class="modal-card" style="max-width: 560px;">
@@ -1097,6 +1209,7 @@
             <option value="projects">Dự án (Projects)</option>
             <option value="events">Sự kiện (Events)</option>
             <option value="tasks">Công việc (Tasks)</option>
+            <option value="sci_journals">Bài báo khoa học (Journals)</option>
           </select>
           <button type="button" class="btn btn-secondary" onclick="loadTrashItems()"><i class="fa-solid fa-rotate-right"></i> Làm mới</button>
         </div>
