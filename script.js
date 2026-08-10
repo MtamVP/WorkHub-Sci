@@ -87,6 +87,18 @@ function getInitials(text) {
   return clean.slice(0, 2).toUpperCase();
 }
 
+// Deterministic per-person avatar color (hashed from email/nickname) so members
+// are visually distinguishable at a glance instead of every avatar sharing the
+// same fixed teal gradient. Lightness is kept mid-range across the whole hue
+// wheel so white avatar text stays readable regardless of the resulting hue.
+function avatarGradient(seed) {
+  const key = String(seed || '').trim().toLowerCase();
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = key.charCodeAt(i) + ((hash << 5) - hash);
+  const hue = Math.abs(hash) % 360;
+  return 'linear-gradient(135deg, hsl(' + hue + ', 60%, 58%), hsl(' + hue + ', 65%, 38%))';
+}
+
 // -------------------- Members Drawer (Thành Viên) --------------------
 
 let SCIENCE_MEMBERS = [];
@@ -251,7 +263,7 @@ function renderMembersList() {
     return `
       <div class="member-item-card" title="${member.email} (${member.group_key || 'workhub-sci'})">
         <div class="member-avatar-box">
-          <div class="member-avatar-circle">${initials}</div>
+          <div class="member-avatar-circle" style="background:${avatarGradient(member.email)}">${initials}</div>
           <div class="status-dot-indicator ${statusDotClass}"></div>
         </div>
         <div class="member-content">
@@ -1014,7 +1026,7 @@ function renderChatPresenceList() {
     return `
       <div class="member-item-card chat-presence-item" title="${escapeHtml(member.email)}">
         <div class="member-avatar-box">
-          <div class="member-avatar-circle">${escapeHtml(initials)}</div>
+          <div class="member-avatar-circle" style="background:${avatarGradient(member.email)}">${escapeHtml(initials)}</div>
           <div class="status-dot-indicator ${statusDotClass}"></div>
         </div>
         <div class="member-content">
@@ -1063,7 +1075,7 @@ function updateChatMentionDropdown() {
 
   dropdown.innerHTML = matches.map((c, i) =>
     '<div class="chat-mention-item' + (i === 0 ? ' active' : '') + '" onmousedown="event.preventDefault(); pickChatMention(' + i + ')">' +
-    '<span class="chat-mention-avatar">' + escapeHtml(getInitials(c.label)) + '</span>' +
+    '<span class="chat-mention-avatar" style="background:' + avatarGradient(c.label) + '">' + escapeHtml(getInitials(c.label)) + '</span>' +
     '<span>' + escapeHtml(c.label) + '</span>' +
     '</div>'
   ).join('');

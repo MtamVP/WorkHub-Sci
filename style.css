@@ -1448,7 +1448,7 @@ body.app-locked .user-profile-wrapper {
 .member-avatar-box { position: relative; flex-shrink: 0; }
 .member-avatar-circle {
   width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #80e8dd, #48bfae);
-  color: #0c332d; font-size: 15px; font-weight: 800; display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 15px; font-weight: 800; display: flex; align-items: center; justify-content: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); overflow: hidden;
 }
 .member-avatar-img { width: 100%; height: 100%; object-fit: cover; }
@@ -1599,7 +1599,7 @@ body.app-locked .user-profile-wrapper {
 .chat-msg-bubble.is-other .chat-reply-quote { background: var(--hover-bg); }
 .chat-reply-quote strong { display: block; opacity: .85; }
 
-.chat-mention-tag { background: rgba(0, 210, 255, 0.18); color: var(--cyan-accent); padding: 1px 5px; border-radius: var(--radius-xs); font-weight: 600; }
+.chat-mention-tag { background: var(--warning-bg); color: var(--warning-color); padding: 1px 5px; border-radius: var(--radius-xs); font-weight: 600; }
 
 .chat-msg-actions { display: flex; gap: 2px; margin-top: 3px; opacity: 0; transition: opacity .15s ease; }
 .chat-msg-row:hover .chat-msg-actions,
@@ -1628,6 +1628,11 @@ body.app-locked .user-profile-wrapper {
   margin-bottom: 6px;
   white-space: nowrap;
 }
+/* is-other rows sit flush against the left edge of the chat pane -- anchoring
+   the popup from its right edge (default above) makes it grow further left
+   and spill outside the visible pane. Anchor from the left instead so it
+   grows rightward, into the space that's actually available. */
+.chat-msg-row.is-other .chat-emoji-popup { left: 0; right: auto; }
 .chat-emoji-popup.open { display: flex; }
 .chat-emoji-popup span { cursor: pointer; font-size: 16px; transition: transform .1s ease; }
 .chat-emoji-popup span:hover { transform: scale(1.25); }
@@ -1670,7 +1675,7 @@ body.app-locked .user-profile-wrapper {
   width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
   background: var(--science-accent); color: #fff;
   display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700;
+  font-size: 11px; font-weight: 700; overflow: hidden;
 }
 
 .chat-input-row button[type="submit"] {

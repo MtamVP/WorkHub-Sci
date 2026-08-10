@@ -195,13 +195,24 @@ async function ensureLinkedProject(topic) {
     const ownerId = await getUserId(topic.owner);
     if (!projectId) {
       projectId = genId("PJ");
+      // The projects table's RLS INSERT policy requires group_key to match the
+      // caller's own current_user_group() (or be 'all') -- a value hardcoded
+      // here would silently fail RLS for any real user whose public.users row
+      // still carries the legacy 'science' group_key rather than 'workhub-sci'
+      // (that migration hasn't been run for every account yet). Look up the
+      // actual signed-in user's real group instead of assuming one.
+      let myGroupKey = "workhub-sci";
+      if (state.userEmail && typeof API !== "undefined" && API.auth) {
+        const resolved = await API.auth.getUserGroup(state.userEmail);
+        if (resolved && resolved !== "guest") myGroupKey = resolved;
+      }
       const { error } = await sbClient.from("projects").insert({
         id: projectId,
         name: topic.title,
         owner_id: ownerId,
         status: "Planning",
         description: `Tự động tạo từ Research Hub — chủ đề nghiên cứu "${topic.title}".`,
-        group_key: "workhub-sci"
+        group_key: myGroupKey
       });
       if (error) throw error;
       showToast(`Đã tự động tạo dự án "${topic.title}" trong mục Dự Án.`);
@@ -218,6 +229,25 @@ async function ensureLinkedProject(topic) {
 }
 
 async function loadWhoami() {
+  // /api/whoami reads Cf-Access-Authenticated-User-Email, a header from this
+  // app's earlier Cloudflare Access-gated life (the original standalone
+  // research-hub-final project). WorkHub-Sci authenticates via Supabase Auth
+  // instead, so that header is never set here and the endpoint always falls
+  // back to a hardcoded placeholder -- ask the real, shared Supabase session
+  // first (persisted in localStorage by script.js's own login on this same
+  // origin) and only fall back to the Access-based endpoint if that's empty.
+  try {
+    if (typeof sbClient !== "undefined" && sbClient) {
+      const { data } = await sbClient.auth.getUser();
+      if (data && data.user && data.user.email) {
+        state.userEmail = data.user.email;
+        updateStatusStrip();
+        return;
+      }
+    }
+  } catch (error) {
+    console.warn("Không thể lấy phiên Supabase:", error);
+  }
   try {
     const response = await fetch("/api/whoami");
     if (!response.ok) return;
