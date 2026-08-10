@@ -72,6 +72,20 @@ const els = {
   decisionsList: document.querySelector("#decisionsList")
 };
 
+const GRAPH_WIDTH = 960;
+const GRAPH_HEIGHT = 600;
+let graphSim = null;
+let graphD3Promise = null;
+const graphNodePositions = new Map();
+let graphFingerprintCache = null;
+let graphSelectedId = null;
+let graphShowPapers = true;
+let graphOnlySharedTags = false;
+let graphLiveNodeSel = null;
+let graphLiveLinkSel = null;
+let graphLiveNodes = null;
+let graphLiveLinks = null;
+
 const viewText = {
   overview: ["Tổng quan", "Tổng quan danh mục", "So sánh các chủ đề nghiên cứu theo mức ưu tiên, tác động, bằng chứng, người phụ trách và mức độ sẵn sàng."],
   topics: ["Chủ đề", "Danh mục chủ đề nghiên cứu", "Quản lý chủ đề, chấm điểm, bằng chứng, người đóng góp, hành động và quyết định."],
@@ -777,6 +791,7 @@ function renderAuxiliary() {
 }
 
 function renderTable() {
+  if (state.activeView !== "graph") teardownGraphSimulation();
   if (state.activeView === "papers") return renderPapers();
   if (state.activeView === "decisions") return renderDecisions();
   if (state.activeView === "graph") return renderGraph();
@@ -909,48 +924,341 @@ function renderDecisions() {
 function renderGraph() {
   setColumns("1fr", ["Sơ đồ tri thức"]);
   const topics = filteredTopics();
+
+  if (!topics.length) {
+    teardownGraphSimulation();
+    graphFingerprintCache = null;
+    return emptyTable("Không tìm thấy chủ đề nào", "Thay đổi tìm kiếm/bộ lọc, hoặc thêm chủ đề nghiên cứu mới để xem sơ đồ.");
+  }
+
+  const graphData = buildGraphData(topics, { showPapers: graphShowPapers, onlySharedTags: graphOnlySharedTags });
+  const fingerprint = graphFingerprint(topics, graphShowPapers, graphOnlySharedTags);
+
+  if (graphFingerprintCache !== null && fingerprint === graphFingerprintCache && document.getElementById("graphSvgRoot")) {
+    return;
+  }
+  graphFingerprintCache = fingerprint;
+
+  if (graphSelectedId && !graphData.nodes.some((n) => n.id === graphSelectedId)) graphSelectedId = null;
+
   els.tableRows.innerHTML = `
     <div class="table-row">
       <section class="graph-panel">
-        <div class="knowledge-map">
-          <div class="map-header">
-            <span>Thẻ / lĩnh vực</span>
-            <span>Chủ đề nghiên cứu</span>
-            <span>Tài liệu liên quan</span>
+        <div class="graph-toolbar">
+          <div class="graph-stats">${graphStatsText(topics, graphData)}</div>
+          <div class="graph-controls">
+            <label class="graph-toggle"><input type="checkbox" id="graphTogglePapers" ${graphShowPapers ? "checked" : ""} /> Hiện tài liệu trích dẫn</label>
+            <label class="graph-toggle"><input type="checkbox" id="graphToggleShared" ${graphOnlySharedTags ? "checked" : ""} /> Chỉ hiện mục dùng chung (≥2 chủ đề)</label>
+            <button type="button" class="ghost-button" id="graphResetLayoutButton">Đặt lại bố cục</button>
           </div>
-          ${topics.map((topic) => knowledgeMapRow(topic)).join("") || `<div class="map-row"><span class="map-empty">Không có chủ đề nào khớp bộ lọc hiện tại.</span></div>`}
+        </div>
+        <div class="graph-legend">
+          <span class="legend-item"><i style="background:#b42318"></i>Nghiêm trọng</span>
+          <span class="legend-item"><i style="background:#b7791f"></i>Cao</span>
+          <span class="legend-item"><i style="background:#2563eb"></i>Trung bình</span>
+          <span class="legend-item"><i style="background:#15803d"></i>Thấp</span>
+          <span class="legend-item"><i style="background:#0f766e"></i>Thẻ dùng chung</span>
+          <span class="legend-item"><i style="background:#15803d"></i>Tài liệu (bằng chứng mạnh)</span>
+          <span class="legend-item legend-hint">Kéo để sắp xếp · cuộn để phóng to · bấm để xem chi tiết</span>
+        </div>
+        <div class="graph-stage">
+          <div class="graph-svg-wrap" id="graphSvgWrap">
+            <svg id="graphSvgRoot" viewBox="0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}" preserveAspectRatio="xMidYMid meet"></svg>
+          </div>
+          <aside class="graph-detail" id="graphDetail">${graphDetailPlaceholder()}</aside>
         </div>
       </section>
     </div>`;
+
+  document.getElementById("graphTogglePapers").addEventListener("change", (event) => {
+    graphShowPapers = event.target.checked;
+    graphFingerprintCache = null;
+    renderGraph();
+  });
+  document.getElementById("graphToggleShared").addEventListener("change", (event) => {
+    graphOnlySharedTags = event.target.checked;
+    graphFingerprintCache = null;
+    renderGraph();
+  });
+  document.getElementById("graphResetLayoutButton").addEventListener("click", () => {
+    graphNodePositions.clear();
+    graphFingerprintCache = null;
+    renderGraph();
+  });
+
+  mountGraph(graphData).catch((error) => {
+    console.warn(error);
+    const wrap = document.getElementById("graphSvgWrap");
+    if (wrap) wrap.innerHTML = `<p class="map-empty" style="padding:24px;">Không thể tải sơ đồ trực quan (${escapeHtml(error.message || String(error))}).</p>`;
+  });
 }
 
-function knowledgeMapRow(topic) {
+function graphStatsText(topics, graphData) {
+  const parts = [`${topics.length} chủ đề`, `${graphData.tagTotal} thẻ${graphData.sharedTagTotal ? ` (${graphData.sharedTagTotal} dùng chung)` : ""}`];
+  if (graphShowPapers) parts.push(`${graphData.paperTotal} tài liệu${graphData.sharedPaperTotal ? ` (${graphData.sharedPaperTotal} được nhiều chủ đề trích dẫn)` : ""}`);
+  return escapeHtml(parts.join(" · "));
+}
+
+function graphDetailPlaceholder() {
+  return `<div class="graph-detail-empty"><strong>Chưa chọn mục nào</strong><p class="muted">Bấm vào một chủ đề, thẻ hoặc tài liệu trong sơ đồ để xem chi tiết và các liên kết của nó.</p></div>`;
+}
+
+function teardownGraphSimulation() {
+  if (graphSim) {
+    graphSim.stop();
+    graphSim = null;
+  }
+  graphLiveNodeSel = null;
+  graphLiveLinkSel = null;
+  graphLiveNodes = null;
+  graphLiveLinks = null;
+}
+
+function graphFingerprint(topics, showPapers, onlySharedTags) {
+  const body = topics.map((t) => `${t.id}:${t.updatedAt}:${t.tags.join(",")}:${t.papers.length}:${t.priority}:${t.title}`).join("|");
+  return `${showPapers ? 1 : 0}${onlySharedTags ? 1 : 0}|${body}`;
+}
+
+function buildGraphData(topics, options) {
+  const tagIndex = new Map();
+  const paperIndex = new Map();
+  const nodes = [];
+  const links = [];
+
+  topics.forEach((topic) => {
+    nodes.push({ id: `topic:${topic.id}`, kind: "topic", label: topic.title, topic, score: topicScore(topic) });
+
+    topic.tags.forEach((rawTag) => {
+      const tag = String(rawTag || "").trim();
+      if (!tag) return;
+      const key = tag.toLowerCase();
+      if (!tagIndex.has(key)) tagIndex.set(key, { id: `tag:${key}`, kind: "tag", label: tag, topicIds: new Set() });
+      tagIndex.get(key).topicIds.add(topic.id);
+    });
+
+    if (options.showPapers) {
+      topic.papers.forEach((paper) => {
+        const key = (paper.doi || paper.url || paper.title || "").toLowerCase().trim();
+        if (!key) return;
+        if (!paperIndex.has(key)) paperIndex.set(key, { id: `paper:${key}`, kind: "paper", label: paper.title || paper.doi || paper.url, paper, topicIds: new Set() });
+        paperIndex.get(key).topicIds.add(topic.id);
+      });
+    }
+  });
+
+  let sharedTagTotal = 0;
+  tagIndex.forEach((tagNode) => {
+    if (tagNode.topicIds.size > 1) sharedTagTotal += 1;
+    if (options.onlySharedTags && tagNode.topicIds.size < 2) return;
+    nodes.push(tagNode);
+    tagNode.topicIds.forEach((topicId) => links.push({ source: `topic:${topicId}`, target: tagNode.id, kind: "tag" }));
+  });
+
+  let sharedPaperTotal = 0;
+  paperIndex.forEach((paperNode) => {
+    if (paperNode.topicIds.size > 1) sharedPaperTotal += 1;
+    if (options.onlySharedTags && paperNode.topicIds.size < 2) return;
+    nodes.push(paperNode);
+    paperNode.topicIds.forEach((topicId) => links.push({ source: `topic:${topicId}`, target: paperNode.id, kind: "paper", evidenceLevel: paperNode.paper.evidenceLevel }));
+  });
+
+  return { nodes, links, tagTotal: tagIndex.size, sharedTagTotal, paperTotal: paperIndex.size, sharedPaperTotal };
+}
+
+function priorityColor(priority) {
+  return { Critical: "#b42318", High: "#b7791f", Medium: "#2563eb", Low: "#15803d" }[priority] || "#617179";
+}
+
+function evidenceColor(level) {
+  return { Strong: "#15803d", Moderate: "#2563eb", Weak: "#b42318", Unrated: "#94a3ac" }[level] || "#94a3ac";
+}
+
+function graphNodeRadius(d) {
+  if (d.kind === "topic") return 13 + Math.round(((d.score || 0) / 100) * 11);
+  if (d.kind === "tag") return d.topicIds.size > 1 ? 9 + Math.min(d.topicIds.size, 7) * 2 : 7;
+  return d.topicIds.size > 1 ? 8 + Math.min(d.topicIds.size, 6) * 2 : 6;
+}
+
+function graphNodeFill(d) {
+  if (d.kind === "topic") return priorityColor(d.topic.priority);
+  if (d.kind === "tag") return d.topicIds.size > 1 ? "#0f766e" : "#a9c0c2";
+  return d.topicIds.size > 1 ? evidenceColor(d.paper.evidenceLevel) : "#c7d2d4";
+}
+
+async function loadGraphD3() {
+  if (!graphD3Promise) graphD3Promise = import("https://cdn.jsdelivr.net/npm/d3@7/+esm");
+  return graphD3Promise;
+}
+
+async function mountGraph(graphData) {
+  teardownGraphSimulation();
+  const d3 = await loadGraphD3();
+  const svgRoot = document.getElementById("graphSvgRoot");
+  if (!svgRoot) return;
+
+  const nodes = graphData.nodes.map((n) => {
+    const saved = graphNodePositions.get(n.id);
+    return saved ? { ...n, ...saved } : { ...n };
+  });
+  const links = graphData.links.map((l) => ({ ...l }));
+
+  const svg = d3.select(svgRoot);
+  svg.selectAll("*").remove();
+
+  const viewport = svg.append("g").attr("class", "graph-viewport");
+  const linkLayer = viewport.append("g").attr("class", "graph-links");
+  const nodeLayer = viewport.append("g").attr("class", "graph-nodes");
+
+  const zoom = d3.zoom().scaleExtent([0.4, 2.5]).on("zoom", (event) => viewport.attr("transform", event.transform));
+  svg.call(zoom).on("dblclick.zoom", null);
+  svg.on("click", () => selectGraphNode(null, graphData));
+
+  const linkSel = linkLayer.selectAll("line").data(links).join("line")
+    .attr("class", (d) => `graph-link graph-link-${d.kind}`)
+    .attr("stroke", (d) => (d.kind === "tag" ? "#c9d8da" : evidenceColor(d.evidenceLevel)))
+    .attr("stroke-width", (d) => (d.kind === "tag" ? 1.4 : ({ Strong: 2.6, Moderate: 1.8, Weak: 1.2 }[d.evidenceLevel] || 1.2)))
+    .attr("stroke-dasharray", (d) => (d.kind === "tag" ? "3,3" : null));
+
+  const nodeSel = nodeLayer.selectAll("g.gnode").data(nodes, (d) => d.id).join((enter) => {
+    const g = enter.append("g").attr("class", (d) => `gnode gnode-${d.kind}`);
+    g.append("circle");
+    g.append("text").attr("class", "gnode-label");
+    g.append("title");
+    return g;
+  });
+
+  nodeSel.select("circle")
+    .attr("r", graphNodeRadius)
+    .attr("fill", graphNodeFill)
+    .attr("stroke", "#fff")
+    .attr("stroke-width", 1.5);
+
+  nodeSel.select("text")
+    .text((d) => (d.kind === "paper" ? "" : shorten(d.label, 22)))
+    .attr("dy", (d) => graphNodeRadius(d) + 12)
+    .attr("text-anchor", "middle");
+
+  nodeSel.select("title")
+    .text((d) => (d.kind === "topic" ? `${d.label} (điểm ${d.score}/100)` : d.kind === "tag" ? `${d.label} - ${d.topicIds.size} chủ đề` : `${d.label} - ${d.topicIds.size} chủ đề trích dẫn`));
+
+  nodeSel.style("cursor", "pointer");
+  nodeSel.on("click", (event, d) => {
+    event.stopPropagation();
+    selectGraphNode(d.id, graphData);
+  });
+
+  nodeSel.call(d3.drag()
+    .on("start", (event, d) => {
+      if (!event.active) sim.alphaTarget(0.2).restart();
+      d.fx = d.x;
+      d.fy = d.y;
+    })
+    .on("drag", (event, d) => {
+      d.fx = event.x;
+      d.fy = event.y;
+    })
+    .on("end", (event, d) => {
+      if (!event.active) sim.alphaTarget(0);
+      graphNodePositions.set(d.id, { x: d.x, y: d.y, vx: 0, vy: 0, fx: d.x, fy: d.y });
+    }));
+
+  const sim = d3.forceSimulation(nodes)
+    .force("link", d3.forceLink(links).id((d) => d.id)
+      .distance((l) => (l.kind === "tag" ? 85 : 65))
+      .strength((l) => (l.kind === "tag" ? 0.4 : 0.55)))
+    .force("charge", d3.forceManyBody().strength((d) => (d.kind === "topic" ? -240 : d.kind === "tag" ? -130 : -70)))
+    .force("collide", d3.forceCollide().radius((d) => graphNodeRadius(d) + 8))
+    .force("center", d3.forceCenter(GRAPH_WIDTH / 2, GRAPH_HEIGHT / 2))
+    .force("x", d3.forceX(GRAPH_WIDTH / 2).strength(0.02))
+    .force("y", d3.forceY(GRAPH_HEIGHT / 2).strength(0.02))
+    .alpha(graphNodePositions.size ? 0.35 : 1)
+    .on("tick", () => {
+      nodes.forEach((n) => graphNodePositions.set(n.id, { x: n.x, y: n.y, vx: n.vx, vy: n.vy, fx: n.fx, fy: n.fy }));
+      linkSel
+        .attr("x1", (d) => d.source.x).attr("y1", (d) => d.source.y)
+        .attr("x2", (d) => d.target.x).attr("y2", (d) => d.target.y);
+      nodeSel.attr("transform", (d) => `translate(${d.x},${d.y})`);
+    });
+
+  graphSim = sim;
+  graphLiveNodeSel = nodeSel;
+  graphLiveLinkSel = linkSel;
+  graphLiveNodes = nodes;
+  graphLiveLinks = links;
+  if (graphSelectedId) selectGraphNode(graphSelectedId, graphData);
+}
+
+function selectGraphNode(id, graphData) {
+  graphSelectedId = id;
+  applyGraphSelectionStyles();
+  const panel = document.getElementById("graphDetail");
+  if (!panel) return;
+  if (!id) {
+    panel.innerHTML = graphDetailPlaceholder();
+    return;
+  }
+  const node = graphData.nodes.find((n) => n.id === id);
+  panel.innerHTML = node ? renderGraphDetailHtml(node, graphData) : graphDetailPlaceholder();
+}
+
+function applyGraphSelectionStyles() {
+  if (!graphLiveNodeSel || !graphLiveLinkSel) return;
+  if (!graphSelectedId) {
+    graphLiveNodeSel.classed("dim", false);
+    graphLiveLinkSel.classed("dim", false);
+    return;
+  }
+  const neighborIds = new Set([graphSelectedId]);
+  graphLiveLinks.forEach((l) => {
+    const sourceId = typeof l.source === "object" ? l.source.id : l.source;
+    const targetId = typeof l.target === "object" ? l.target.id : l.target;
+    if (sourceId === graphSelectedId) neighborIds.add(targetId);
+    if (targetId === graphSelectedId) neighborIds.add(sourceId);
+  });
+  graphLiveNodeSel.classed("dim", (d) => !neighborIds.has(d.id));
+  graphLiveLinkSel.classed("dim", (d) => {
+    const sourceId = typeof d.source === "object" ? d.source.id : d.source;
+    const targetId = typeof d.target === "object" ? d.target.id : d.target;
+    return sourceId !== graphSelectedId && targetId !== graphSelectedId;
+  });
+}
+
+function renderGraphDetailHtml(node, graphData) {
+  if (node.kind === "topic") {
+    const topic = node.topic;
+    return `
+      <div class="graph-detail-head">
+        <span class="badge ${escapeHtml(badgeClass(topic.priority))}">${escapeHtml(tr(topic.priority))}</span>
+        <strong>${escapeHtml(topic.title)}</strong>
+      </div>
+      <p class="muted">${escapeHtml(tr(topic.status))} · Tác động ${escapeHtml(tr(topic.impact))} · Điểm ${topicScore(topic)}/100</p>
+      <p class="muted">Phụ trách: ${escapeHtml(ownerLabel(topic.owner) || "Chưa phân công")}</p>
+      <div class="tag-list">${topic.tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join("") || '<span class="muted">Chưa có thẻ</span>'}</div>
+      <p class="muted">${topic.papers.length} tài liệu liên quan</p>
+      <button class="inline-button" type="button" data-action="view" data-id="${escapeHtml(topic.id)}">Xem chi tiết đầy đủ</button>
+    `;
+  }
+  if (node.kind === "tag") {
+    const relatedTopics = graphData.nodes.filter((n) => n.kind === "topic" && node.topicIds.has(n.topic.id));
+    return `
+      <div class="graph-detail-head"><strong>Thẻ: ${escapeHtml(node.label)}</strong></div>
+      <p class="muted">${node.topicIds.size} chủ đề đang dùng thẻ này${node.topicIds.size > 1 ? " — đây là điểm giao thoa giữa các hướng nghiên cứu" : ""}</p>
+      <ul class="graph-detail-list">
+        ${relatedTopics.map((n) => `<li><button class="inline-button" type="button" data-action="view" data-id="${escapeHtml(n.topic.id)}">${escapeHtml(n.topic.title)}</button></li>`).join("")}
+      </ul>
+    `;
+  }
+  const paper = node.paper;
+  const relatedTopics = graphData.nodes.filter((n) => n.kind === "topic" && node.topicIds.has(n.topic.id));
   return `
-    <div class="map-row">
-      <div class="map-tags">
-        ${topic.tags.length ? topic.tags.slice(0, 6).map((tag) => `<span class="map-chip">${escapeHtml(tag)}</span>`).join("") : '<span class="map-empty">Chưa có thẻ</span>'}
-      </div>
-      <div class="map-topic-wrap">
-        <article class="map-topic">
-          <span class="map-topic-dot">${topicScore(topic)}</span>
-          <span>
-            <strong>${escapeHtml(topic.title)}</strong>
-            <small>${escapeHtml(tr(topic.status))} - Ưu tiên ${escapeHtml(tr(topic.priority))} - Tác động ${escapeHtml(tr(topic.impact))}</small>
-          </span>
-        </article>
-      </div>
-      <div class="map-papers">
-        ${topic.papers.length ? topic.papers.slice(0, 4).map((paper) => `
-          <article class="map-paper">
-            <span></span>
-            <span>
-              <strong>${escapeHtml(shorten(paper.title, 58))}</strong>
-              <small>${escapeHtml([paper.source || paper.journal, paper.year, paper.evidenceLevel].filter(Boolean).join(" - "))}</small>
-            </span>
-          </article>
-        `).join("") : '<span class="map-empty">Chưa có tài liệu liên quan</span>'}
-      </div>
-    </div>
+    <div class="graph-detail-head"><strong>${escapeHtml(paper.title || "Tài liệu")}</strong></div>
+    <p class="muted">${escapeHtml([paper.authors, paper.source || paper.journal, paper.year].filter(Boolean).join(" · ") || "Chưa có nguồn")}</p>
+    <span class="badge ${escapeHtml(badgeClass(paper.evidenceLevel || "Moderate"))}">${escapeHtml(tr(paper.evidenceLevel || "Moderate"))}</span>
+    <p class="muted">${escapeHtml(paper.finding || "Chưa ghi kết quả")}</p>
+    <p class="muted">${node.topicIds.size > 1 ? `Được ${node.topicIds.size} chủ đề cùng trích dẫn — có thể có liên hệ đáng chú ý` : "Chỉ 1 chủ đề trích dẫn"}</p>
+    <ul class="graph-detail-list">
+      ${relatedTopics.map((n) => `<li><button class="inline-button" type="button" data-action="view" data-id="${escapeHtml(n.topic.id)}">${escapeHtml(n.topic.title)}</button></li>`).join("")}
+    </ul>
   `;
 }
 
