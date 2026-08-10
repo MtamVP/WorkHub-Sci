@@ -116,7 +116,7 @@ const API = {
                 const { data: usersData, error: userErr } = await sbClient
                     .from('users')
                     .select('email, nickname, group_key, created_at')
-                    .in('group_key', ['science', 'admin', 'all', 'Science', 'Admin', 'All'])
+                    .eq('group_key', 'science')
                     .order('created_at', { ascending: false });
 
                 if (userErr) console.warn("Lỗi lấy users:", userErr);
@@ -857,6 +857,9 @@ const API = {
             } else {
                 query = query.eq('group_key', groupKey);
             }
+            if (filters && filters.projectId) {
+                query = query.eq('project_id', filters.projectId);
+            }
             const { data, error } = await query;
             if (error) throw error;
 
@@ -877,6 +880,8 @@ const API = {
                     name: f.name,
                     description: f.description,
                     folderPath: folderPath,
+                    projectId: f.project_id,
+                    taskId: f.task_id,
                     uploader: f.users ? f.users.email : 'Unknown',
                     date: new Date(f.created_at).toLocaleString('vi-VN'),
                     url: `${SUPABASE_URL}/storage/v1/object/public/${f.storage_path}`,
@@ -899,7 +904,7 @@ const API = {
         getRecentFilesForDashboard: async (groupKey) => {
             return API.file.list(groupKey, {});
         },
-        upload: async (fileData, fileName, mimeType, groupKey, description, uploaderEmail, folderPath = "") => {
+        upload: async (fileData, fileName, mimeType, groupKey, description, uploaderEmail, folderPath = "", projectId = null, taskId = null) => {
             if (!sbClient) throw new Error("Supabase chưa được cấu hình.");
 
             if (fileData.includes('base64,')) fileData = fileData.split('base64,')[1];
@@ -924,7 +929,9 @@ const API = {
                 mime_type: mimeType,
                 uploader_id: uploaderId,
                 group_key: groupKey,
-                description: description || ''
+                description: description || '',
+                project_id: projectId || null,
+                task_id: taskId || null
             });
 
             if (dbError) throw dbError;
@@ -1643,6 +1650,114 @@ const API = {
             try { sbClient.removeChannel(API.realtime._channel); } catch (err) {  }
             API.realtime._channel = null;
         }
+    },
+
+    sciRoles: {
+        // Vai trò tầng 2 riêng của Science ("phòng thí nghiệm") — không liên quan group_key của org.
+        getMyRoles: async (email) => {
+            const userId = await getUserId(email);
+            const { data, error } = await sbClient.from('sci_roles').select('role').eq('user_id', userId);
+            if (error) throw error;
+            return (data || []).map(r => r.role);
+        },
+        listAll: async () => {
+            const { data: members, error: mErr } = await sbClient.from('users').select('id, email, nickname').in('group_key', ['science', 'all']);
+            if (mErr) throw mErr;
+            const { data: roles, error: rErr } = await sbClient.from('sci_roles').select('user_id, role');
+            if (rErr) throw rErr;
+            return (members || []).map(m => ({
+                email: m.email,
+                nickname: m.nickname || m.email,
+                roles: (roles || []).filter(r => r.user_id === m.id).map(r => r.role)
+            }));
+        },
+        grantRole: async (targetEmail, role, byEmail) => {
+            const targetId = await getUserId(targetEmail);
+            const byId = await getUserId(byEmail);
+            const { error } = await sbClient.from('sci_roles').insert({ user_id: targetId, role, granted_by: byId });
+            if (error) throw error;
+            return { success: true };
+        },
+        revokeRole: async (targetEmail, role) => {
+            const targetId = await getUserId(targetEmail);
+            const { error } = await sbClient.from('sci_roles').delete().eq('user_id', targetId).eq('role', role);
+            if (error) throw error;
+            return { success: true };
+        }
+    },
+
+    journal: {
+        list: async (groupKey, searchName = "") => {
+            if (!sbClient) return [];
+            let query = sbClient.from('sci_journals').select('*, users!owner_id(nickname)')
+                .is('deleted_at', null).order('updated_at', { ascending: false }).limit(300);
+            if (groupKey !== 'all') query = query.eq('group_key', groupKey);
+            if (searchName) query = query.ilike('title', `%${searchName}%`);
+            const { data, error } = await query;
+            if (error) throw error;
+            return (data || []).map(j => ({
+                id: j.id, title: j.title, authors: j.authors, docDate: j.doc_date,
+                owner: j.users ? (j.users.nickname || '') : '', updatedAt: j.updated_at
+            }));
+        },
+
+        get: async (id) => {
+            const { data, error } = await sbClient.from('sci_journals').select('*').eq('id', id).maybeSingle();
+            if (error) throw error;
+            return data;
+        },
+
+        create: async (journalData, groupKey, email) => {
+            const id = genId('JR');
+            const ownerId = await getUserId(email);
+            const { error } = await sbClient.from('sci_journals').insert({
+                id, title: journalData.title, authors: journalData.authors || '',
+                doc_date: journalData.docDate || new Date().toISOString().slice(0, 10),
+                abstract: journalData.abstract || '', introduction: journalData.introduction || '',
+                methods: journalData.methods || '', results: journalData.results || '',
+                discussion: journalData.discussion || '', conclusion: journalData.conclusion || '',
+                references_text: journalData.referencesText || '',
+                owner_id: ownerId, group_key: groupKey
+            });
+            if (error) throw error;
+            return `Đã tạo bài báo "${journalData.title}"!`;
+        },
+
+        update: async (id, journalData) => {
+            const { data, error } = await sbClient.from('sci_journals').update({
+                updated_at: new Date().toISOString(),
+                title: journalData.title, authors: journalData.authors || '', doc_date: journalData.docDate,
+                abstract: journalData.abstract || '', introduction: journalData.introduction || '',
+                methods: journalData.methods || '', results: journalData.results || '',
+                discussion: journalData.discussion || '', conclusion: journalData.conclusion || '',
+                references_text: journalData.referencesText || ''
+            }).eq('id', id).select('title').maybeSingle();
+            if (error) throw error;
+            return `Đã cập nhật bài báo "${data.title}"!`;
+        },
+
+        duplicate: async (id, groupKey, email) => {
+            const { data: src, error: fErr } = await sbClient.from('sci_journals').select('*').eq('id', id).maybeSingle();
+            if (fErr) throw fErr;
+            if (!src) throw new Error('Không tìm thấy bài báo gốc.');
+            const newId = genId('JR');
+            const ownerId = await getUserId(email);
+            const { error } = await sbClient.from('sci_journals').insert({
+                id: newId, title: src.title + ' (Bản sao)', authors: src.authors, doc_date: src.doc_date,
+                abstract: src.abstract, introduction: src.introduction, methods: src.methods,
+                results: src.results, discussion: src.discussion, conclusion: src.conclusion,
+                references_text: src.references_text, owner_id: ownerId, group_key: groupKey
+            });
+            if (error) throw error;
+            return `Đã nhân bản bài báo "${src.title}"!`;
+        },
+
+        delete: async (id) => {
+            const { data, error } = await sbClient.from('sci_journals')
+                .update({ deleted_at: new Date().toISOString() }).eq('id', id).select('title').maybeSingle();
+            if (error) throw error;
+            return `Đã đưa "${data.title}" vào thùng rác!`;
+        }
     }
 };
 
@@ -1653,10 +1768,12 @@ const MUTATING_ACTIONS = new Set([
     'addChecklistItem', 'toggleChecklistItem', 'deleteChecklistItem',
     'createProject', 'updateProject', 'shareProject', 'deleteProject', 'setProjectArchived',
     'addMilestone', 'toggleMilestone', 'deleteMilestone',
+    'createJournal', 'updateJournal', 'duplicateJournal', 'deleteJournal',
     'createEvent', 'updateEvent', 'deleteEvent', 'toggleImportant',
     'uploadFile', 'deleteFile', 'shareFile',
     'restoreItem', 'hardDeleteItem',
-    'provisionUser', 'updateUserGroup', 'removeUser', 'updateNickname'
+    'provisionUser', 'updateUserGroup', 'removeUser', 'updateNickname',
+    'grantSciRole', 'revokeSciRole'
 ]);
 
 window.callGAS = async function(action, params = {}) {
@@ -1684,7 +1801,7 @@ window.callGAS = async function(action, params = {}) {
             case 'getRecentFilesForDashboard': result = await API.file.getRecentFilesForDashboard(params.groupKey); break;
             case 'getFileList': result = await API.file.list(params.groupKey, params); break;
             case 'deleteFile': result = await API.file.delete(params.fileId, params.groupKey); break;
-            case 'uploadFile': result = await API.file.upload(params.fileData, params.fileName, params.mimeType, params.groupKey, params.description, params.email, params.folderPath); break;
+            case 'uploadFile': result = await API.file.upload(params.fileData, params.fileName, params.mimeType, params.groupKey, params.description, params.email, params.folderPath, params.projectId, params.taskId); break;
             case 'shareFile': result = await API.file.share(params.fileId, params.groupKey); break;
 
             case 'getEvents': result = await API.calendar.getEvents(params.startDate, params.endDate, params.calendarType, params.groupKey, params.email); break;
@@ -1705,6 +1822,13 @@ window.callGAS = async function(action, params = {}) {
             case 'toggleMilestone': result = await API.project.toggleMilestone(params.milestoneId, params.isDone); break;
             case 'deleteMilestone': result = await API.project.deleteMilestone(params.milestoneId); break;
             case 'getBurndownData': result = await API.project.getBurndownData(params.projectId); break;
+
+            case 'getJournalList': result = await API.journal.list(params.groupKey, params.searchName); break;
+            case 'getJournal': result = await API.journal.get(params.id); break;
+            case 'createJournal': result = await API.journal.create(params, params.groupKey, params.email); break;
+            case 'updateJournal': result = await API.journal.update(params.id, params); break;
+            case 'duplicateJournal': result = await API.journal.duplicate(params.id, params.groupKey, params.email); break;
+            case 'deleteJournal': result = await API.journal.delete(params.id); break;
 
             case 'getTaskList': result = await API.task.list(params.projectId, params.groupKey); break;
             case 'listMyTasks': result = await API.task.listMine(params.email, params.groupKey); break;
@@ -1750,6 +1874,11 @@ window.callGAS = async function(action, params = {}) {
 
             case 'getNotifications': result = await API.notification.get(params.groupKey, params.limit, params.email); break;
             case 'syncLounge': result = await API.lounge.sync(params); break;
+
+            case 'getMySciRoles': result = await API.sciRoles.getMyRoles(params.email); break;
+            case 'listSciRoles': result = await API.sciRoles.listAll(); break;
+            case 'grantSciRole': result = await API.sciRoles.grantRole(params.targetEmail, params.role, params.byEmail); break;
+            case 'revokeSciRole': result = await API.sciRoles.revokeRole(params.targetEmail, params.role); break;
 
             default:
                 console.warn(`Supabase chưa hỗ trợ action: ${action}`);

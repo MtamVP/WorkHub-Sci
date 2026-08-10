@@ -16,7 +16,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=14">
 </head>
 <body class="app-locked">
 
@@ -76,33 +76,59 @@
 
     <nav id="app-sidebar">
       <div id="hamburger-menu" title="Thu gọn / Mở rộng thanh điều hướng"><i class="fa-solid fa-bars"></i></div>
-      <ul>
-        <li class="nav-item active" data-section="dashboard" onclick="switchSection('dashboard')">
+
+      <ul class="nav-group">
+        <li class="nav-item active" data-section="dashboard" onclick="switchSection('dashboard')" title="Tổng Quan">
           <i class="fa-solid fa-chart-pie"></i><span> Tổng Quan</span>
         </li>
-        <li class="nav-item" data-section="pipeline" onclick="switchSection('pipeline')">
+        <li class="nav-item" data-section="chat" onclick="switchSection('chat')" title="Trò Chuyện">
+          <i class="fa-solid fa-comments"></i><span> Trò Chuyện</span>
+        </li>
+      </ul>
+
+      <div class="nav-group-label"><span>Khoa Học</span></div>
+      <ul class="nav-group">
+        <li class="nav-item" data-section="pipeline" onclick="switchSection('pipeline')" title="Pipeline">
           <i class="fa-solid fa-diagram-project"></i><span> Pipeline</span>
         </li>
-        <li class="nav-item" onclick="window.top.location.href='/ResearchHub/'">
+        <li class="nav-item" data-section="journal" onclick="switchSection('journal')" title="Journal Khoa Học">
+          <i class="fa-solid fa-scroll"></i><span> Journal Khoa Học</span>
+        </li>
+        <li class="nav-item" onclick="window.top.location.href='/ResearchHub/'" title="Tài liệu Nghiên Cứu">
           <i class="fa-solid fa-book"></i><span> Tài liệu Nghiên Cứu</span>
         </li>
-        <li class="nav-item" onclick="window.top.location.href='/ResearchTool/'">
+        <li class="nav-item" onclick="window.top.location.href='/ResearchTool/'" title="Công cụ Nghiên cứu">
           <i class="fa-solid fa-compass"></i><span> Công cụ Nghiên cứu</span>
         </li>
-        <li class="nav-item" data-section="drive" onclick="switchSection('drive')">
-          <i class="fa-solid fa-file-import"></i><span> UploadFile</span>
-        </li>
-        <li class="nav-item" data-section="calendar" onclick="switchSection('calendar')">
-          <i class="fa-solid fa-calendar-days"></i><span> Lịch</span>
-        </li>
-        <li class="nav-item" data-section="progress" onclick="switchSection('progress')">
+      </ul>
+
+      <div class="nav-group-label"><span>Dự Án</span></div>
+      <ul class="nav-group">
+        <li class="nav-item" data-section="progress" onclick="switchSection('progress')" title="Tiến Độ">
           <i class="fa-solid fa-chart-line"></i><span> Tiến Độ</span>
         </li>
-        <li class="nav-item" data-section="mytasks" onclick="switchSection('mytasks')">
+        <li class="nav-item" data-section="mytasks" onclick="switchSection('mytasks')" title="Việc của tôi">
           <i class="fa-solid fa-user-check"></i><span> Việc của tôi</span>
         </li>
-        <li class="nav-item" data-section="task" onclick="switchSection('task')">
+        <li class="nav-item" data-section="task" onclick="switchSection('task')" title="Nhiệm Vụ">
           <i class="fa-solid fa-list-check"></i><span> Nhiệm Vụ</span>
+        </li>
+      </ul>
+
+      <div class="nav-group-label"><span>Công Cụ</span></div>
+      <ul class="nav-group">
+        <li class="nav-item" data-section="drive" onclick="switchSection('drive')" title="UploadFile">
+          <i class="fa-solid fa-file-import"></i><span> UploadFile</span>
+        </li>
+        <li class="nav-item" data-section="calendar" onclick="switchSection('calendar')" title="Lịch">
+          <i class="fa-solid fa-calendar-days"></i><span> Lịch</span>
+        </li>
+      </ul>
+
+      <div class="nav-group-label"><span>Quản Trị</span></div>
+      <ul class="nav-group">
+        <li class="nav-item" onclick="window.top.location.href='/roles/'" title="Phân Quyền">
+          <i class="fa-solid fa-user-shield"></i><span> Phân Quyền</span>
         </li>
       </ul>
     </nav>
@@ -264,6 +290,106 @@
 
     </section>
 
+    <!-- ================= JOURNAL SECTION ("Journal Khoa Học") ================= -->
+    <section class="app-section" id="journal-section">
+
+      <!-- ---- List view: quản lý các bài báo đã viết ---- -->
+      <div id="journal-list-view">
+        <div class="section-hero-card card">
+          <div class="section-hero-info">
+            <h3><i class="fa-solid fa-scroll" style="color: var(--cyan-accent);"></i> Journal Khoa Học</h3>
+            <p>Viết bài báo khoa học và tự động chuyển sang định dạng LaTeX (.tex) chuẩn.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="filter-bar">
+            <div class="form-group">
+              <label class="form-label" for="journal-search">Tìm theo tiêu đề</label>
+              <input type="text" id="journal-search" class="form-control" placeholder="Nhập tiêu đề bài báo..." oninput="renderJournalList()">
+            </div>
+            <div class="form-group" style="flex: 0 0 auto;">
+              <label class="form-label">&nbsp;</label>
+              <button type="button" class="btn btn-primary" onclick="openJournalEditor()"><i class="fa-solid fa-plus"></i> Bài báo mới</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Tiêu đề</th>
+                <th>Tác giả</th>
+                <th>Ngày</th>
+                <th>Cập nhật</th>
+                <th>Hành động</th>
+              </tr>
+            </thead>
+            <tbody id="journal-list-body"><tr><td colspan="5" class="empty-state">Đang tải danh sách bài báo...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ---- Editor view: khu vực làm việc kiểu trang tài liệu (docx-style) ---- -->
+      <div id="journal-editor-view" style="display: none;">
+        <div class="journal-editor-toolbar">
+          <button type="button" class="btn btn-secondary" onclick="closeJournalEditor()"><i class="fa-solid fa-arrow-left"></i> Danh sách</button>
+          <div class="journal-editor-toolbar-spacer"></div>
+          <button type="button" class="btn btn-secondary" onclick="exportCurrentJournalTex()"><i class="fa-solid fa-file-export"></i> Xuất .tex</button>
+          <button type="submit" form="journal-form" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Lưu Bài Báo</button>
+        </div>
+
+        <form id="journal-form" onsubmit="handleJournalFormSubmit(event)">
+          <input type="hidden" id="journal-id">
+
+          <div class="journal-page">
+            <textarea id="journal-title" class="journal-field journal-title-field" rows="1" placeholder="Tiêu đề bài báo" required></textarea>
+
+            <div class="journal-meta-row">
+              <textarea id="journal-authors" class="journal-field journal-meta-field" rows="1" placeholder="Tác giả (ngăn cách bằng dấu phẩy)"></textarea>
+              <input type="date" id="journal-date" class="journal-field journal-meta-field journal-date-field">
+            </div>
+
+            <div class="journal-block">
+              <div class="journal-block-label">Tóm tắt (Abstract)</div>
+              <textarea id="journal-abstract" class="journal-field journal-body-field" rows="1" placeholder="Tóm tắt ngắn gọn nội dung bài báo..."></textarea>
+            </div>
+
+            <div class="journal-block">
+              <div class="journal-block-label">1. Giới thiệu (Introduction)</div>
+              <textarea id="journal-intro" class="journal-field journal-body-field" rows="1" placeholder="Bối cảnh, vấn đề nghiên cứu, mục tiêu..."></textarea>
+            </div>
+
+            <div class="journal-block">
+              <div class="journal-block-label">2. Phương pháp (Methods)</div>
+              <textarea id="journal-methods" class="journal-field journal-body-field" rows="1" placeholder="Thiết kế nghiên cứu, đối tượng, quy trình..."></textarea>
+            </div>
+
+            <div class="journal-block">
+              <div class="journal-block-label">3. Kết quả (Results)</div>
+              <textarea id="journal-results" class="journal-field journal-body-field" rows="1" placeholder="Kết quả thu được..."></textarea>
+            </div>
+
+            <div class="journal-block">
+              <div class="journal-block-label">4. Thảo luận (Discussion)</div>
+              <textarea id="journal-discussion" class="journal-field journal-body-field" rows="1" placeholder="Phân tích, so sánh với các nghiên cứu khác..."></textarea>
+            </div>
+
+            <div class="journal-block">
+              <div class="journal-block-label">5. Kết luận (Conclusion)</div>
+              <textarea id="journal-conclusion" class="journal-field journal-body-field" rows="1" placeholder="Kết luận và hướng nghiên cứu tiếp theo..."></textarea>
+            </div>
+
+            <div class="journal-block">
+              <div class="journal-block-label">Tài liệu tham khảo (mỗi dòng 1 tài liệu)</div>
+              <textarea id="journal-references" class="journal-field journal-body-field journal-references-field" rows="1" placeholder="Nguyen, V. A. et al. (2025). Tên bài báo. Tên tạp chí, 12(3), 45-60."></textarea>
+            </div>
+          </div>
+        </form>
+      </div>
+    </section>
+
     <!-- ================= TASK SECTION ("Nhiệm Vụ") ================= -->
     <section class="app-section" id="task-section">
       <div class="section-hero-card card">
@@ -276,7 +402,53 @@
         </div>
       </div>
 
-      <div class="card" style="padding: 18px 20px;">
+      <div class="card" id="task-project-manager-card" style="padding: 16px 20px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" onclick="toggleProjectManagerPanel()">
+          <h4 style="margin:0; font-size:14px; display:flex; align-items:center; gap:8px;">
+            <i class="fa-solid fa-diagram-project"></i> Quản Lý Dự Án
+            <span id="task-project-manager-count" class="status-pill pill-info" style="font-size:10px;">0</span>
+          </h4>
+          <button type="button" class="icon-btn" id="task-project-manager-toggle-btn" title="Thu gọn/Mở rộng" onclick="event.stopPropagation(); toggleProjectManagerPanel();">
+            <i class="fa-solid fa-chevron-up"></i>
+          </button>
+        </div>
+        <div id="task-project-manager-body" style="margin-top: 14px;">
+          <div class="filter-bar">
+            <div class="form-group">
+              <label class="form-label">Trạng thái dự án</label>
+              <select id="task-project-status-filter" class="form-select" onchange="renderProjectManagerList()">
+                <option value="">-- Tất cả trạng thái --</option>
+                <option value="Planning">Planning</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+                <option value="On Hold">On Hold</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Tìm kiếm dự án</label>
+              <input type="text" id="task-project-search" class="form-control" placeholder="Tên dự án..." oninput="renderProjectManagerList()">
+            </div>
+          </div>
+          <div class="table-container" style="margin-top: 12px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 34%;">Dự án</th>
+                  <th style="width: 16%;">Trạng thái</th>
+                  <th style="width: 16%;">Tiến độ</th>
+                  <th style="width: 20%;">Cập nhật</th>
+                  <th style="width: 14%; text-align:center;">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="task-project-manager-body-list">
+                <tr><td colspan="5" class="empty-state">Đang tải...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 18px 20px; margin-top: 16px;">
         <div class="filter-bar">
           <div class="form-group">
             <label class="form-label">Dự án</label>
@@ -332,6 +504,27 @@
           </div>
           <button type="button" class="icon-btn" id="bulk-select-toggle" onclick="toggleBulkSelectMode()" title="Chọn nhiều"><i class="fa-regular fa-square-check"></i></button>
           <button type="button" class="icon-btn" onclick="exportTasksCsv()" title="Xuất công việc ra CSV"><i class="fa-solid fa-file-csv"></i></button>
+        </div>
+      </div>
+
+      <div class="card" id="task-project-files-card" style="padding: 16px 20px; margin-top: 16px; display: none;">
+        <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" onclick="toggleProjectFilesPanel()">
+          <h4 style="margin:0; font-size:14px; display:flex; align-items:center; gap:8px;">
+            <i class="fa-solid fa-folder-open"></i> Tệp Của Dự Án
+            <span id="task-project-files-count" class="status-pill pill-info" style="font-size:10px;">0</span>
+          </h4>
+          <button type="button" class="icon-btn" id="task-project-files-toggle-btn" title="Thu gọn/Mở rộng" onclick="event.stopPropagation(); toggleProjectFilesPanel();">
+            <i class="fa-solid fa-chevron-up"></i>
+          </button>
+        </div>
+        <div id="task-project-files-body" style="margin-top: 12px;">
+          <div style="display:flex; align-items:center; gap: 10px; margin-bottom: 12px;">
+            <input type="file" id="task-project-file-input" style="display:none;" onchange="handleProjectFileUpload()">
+            <button type="button" class="btn btn-outline" id="task-project-file-upload-btn" onclick="document.getElementById('task-project-file-input').click()">
+              <i class="fa-solid fa-upload"></i> Tải file lên dự án
+            </button>
+          </div>
+          <div class="task-attachment-list" id="task-project-files-list"></div>
         </div>
       </div>
 
@@ -450,6 +643,20 @@
             <select id="progress-project-filter" class="form-select">
               <option value="">-- Tất cả dự án --</option>
             </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Trạng thái</label>
+            <select id="progress-status-filter" class="form-select">
+              <option value="">-- Tất cả trạng thái --</option>
+              <option value="Planning">Planning</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Completed">Completed</option>
+              <option value="On Hold">On Hold</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tìm kiếm</label>
+            <input type="text" id="progress-name-search" class="form-control" placeholder="Tên hoặc mô tả dự án...">
           </div>
           <div class="form-group">
             <label class="form-label">Sắp xếp</label>
@@ -653,6 +860,49 @@
           </thead>
           <tbody id="workload-table-body"><tr><td colspan="7" class="empty-state">Đang tải...</td></tr></tbody>
         </table>
+      </div>
+    </section>
+
+    <section class="app-section" id="chat-section">
+      <div class="section-hero-card card">
+        <div class="section-hero-info">
+          <h3><i class="fa-solid fa-comments" style="color: var(--cyan-accent);"></i> Trò Chuyện Nhóm</h3>
+          <p>Không gian trao đổi chung của nhóm Science — nhắn tin, trả lời, ghim và thả cảm xúc theo thời gian thực.</p>
+        </div>
+      </div>
+
+      <div class="chat-layout">
+        <div class="chat-panel card">
+          <div id="chat-pinned-bar" class="chat-pinned-bar" style="display:none;">
+            <i class="fa-solid fa-thumbtack"></i>
+            <div id="chat-pinned-list" class="chat-pinned-list"></div>
+          </div>
+          <div id="chat-messages-list" class="chat-messages-list">
+            <div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> Đang tải tin nhắn...</div>
+          </div>
+          <div id="chat-reply-preview" class="chat-reply-preview" style="display:none;">
+            <div class="chat-reply-preview-body">
+              <span class="chat-reply-name" id="chat-reply-name"></span>
+              <div class="chat-reply-text" id="chat-reply-text"></div>
+            </div>
+            <button type="button" class="icon-btn" onclick="cancelChatReply()" title="Huỷ trả lời"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <form id="chat-input-form" class="chat-input-row">
+            <div id="chat-mention-dropdown" class="chat-mention-dropdown" style="display:none;"></div>
+            <input type="text" id="chat-msg-input" class="form-control" placeholder="Nhập tin nhắn... (gõ @ để nhắc ai đó)" autocomplete="off">
+            <button type="submit" id="chat-send-btn" title="Gửi tin nhắn"><i class="fa-solid fa-paper-plane"></i></button>
+          </form>
+        </div>
+
+        <aside class="chat-presence-panel card">
+          <div class="chat-presence-header">
+            <span><i class="fa-solid fa-users"></i> Thành viên</span>
+            <span class="chat-presence-count" id="chat-presence-online-count">0</span>
+          </div>
+          <div class="chat-presence-list" id="chat-presence-list">
+            <div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> Đang tải...</div>
+          </div>
+        </aside>
       </div>
     </section>
 
@@ -901,6 +1151,25 @@
   </div>
 
   <!-- Milestones Modal -->
+  <div class="modal-overlay" id="task-files-modal">
+    <div class="modal-card" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-paperclip" style="color: var(--cyan-accent);"></i> Tệp của: <span id="task-files-modal-name"></span></h3>
+        <button class="header-btn" onclick="closeAppModal('task-files-modal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <input type="file" id="task-files-modal-input" style="display:none;" onchange="handleTaskModalFileUpload()">
+        <button type="button" class="btn btn-outline" id="task-files-modal-upload-btn" onclick="document.getElementById('task-files-modal-input').click()" style="margin-bottom: 12px;">
+          <i class="fa-solid fa-upload"></i> Tải file lên
+        </button>
+        <div id="task-files-modal-list" class="task-attachment-list"><div style="padding: 8px; color: var(--text-muted); font-size: 12.5px;">Đang tải...</div></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeAppModal('task-files-modal')">Đóng</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="milestones-modal">
     <div class="modal-card" style="max-width: 520px;">
       <div class="modal-header">
@@ -1031,6 +1300,7 @@
             <option value="projects">Dự án (Projects)</option>
             <option value="events">Sự kiện (Events)</option>
             <option value="tasks">Công việc (Tasks)</option>
+            <option value="sci_journals">Bài báo khoa học (Journals)</option>
           </select>
           <button type="button" class="btn btn-secondary" onclick="loadTrashItems()"><i class="fa-solid fa-rotate-right"></i> Làm mới</button>
         </div>
@@ -1070,7 +1340,7 @@
     </div>
   </div>
 
-  <script src="api.js?v=6"></script>
-  <script src="script.js?v=11"></script>
+  <script src="api.js?v=10"></script>
+  <script src="script.js?v=20"></script>
 </body>
 </html>
