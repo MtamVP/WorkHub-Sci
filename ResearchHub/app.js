@@ -72,8 +72,8 @@ const els = {
   decisionsList: document.querySelector("#decisionsList")
 };
 
-const GRAPH_WIDTH = 960;
-const GRAPH_HEIGHT = 600;
+const GRAPH_WIDTH = 1040;
+const GRAPH_HEIGHT = 660;
 let graphSim = null;
 let graphD3Promise = null;
 const graphNodePositions = new Map();
@@ -949,6 +949,11 @@ function renderGraph() {
           <div class="graph-controls">
             <label class="graph-toggle"><input type="checkbox" id="graphTogglePapers" ${graphShowPapers ? "checked" : ""} /> Hiện tài liệu trích dẫn</label>
             <label class="graph-toggle"><input type="checkbox" id="graphToggleShared" ${graphOnlySharedTags ? "checked" : ""} /> Chỉ hiện mục dùng chung (≥2 chủ đề)</label>
+            <div class="graph-zoom-controls">
+              <button type="button" class="icon-button" id="graphZoomOutButton" title="Thu nhỏ">−</button>
+              <button type="button" class="icon-button" id="graphZoomInButton" title="Phóng to">+</button>
+              <button type="button" class="ghost-button" id="graphFitButton">Vừa khung hình</button>
+            </div>
             <button type="button" class="ghost-button" id="graphResetLayoutButton">Đặt lại bố cục</button>
           </div>
         </div>
@@ -959,7 +964,8 @@ function renderGraph() {
           <span class="legend-item"><i style="background:#15803d"></i>Thấp</span>
           <span class="legend-item"><i style="background:#0f766e"></i>Thẻ dùng chung</span>
           <span class="legend-item"><i style="background:#15803d"></i>Tài liệu (bằng chứng mạnh)</span>
-          <span class="legend-item legend-hint">Kéo để sắp xếp · cuộn để phóng to · bấm để xem chi tiết</span>
+          <span class="legend-item legend-hint">Kích thước nút lớn hơn = điểm cao hơn / dùng chung nhiều hơn</span>
+          <span class="legend-item legend-hint">Di chuột để xem trước · kéo để sắp xếp · bấm để ghim xem chi tiết</span>
         </div>
         <div class="graph-stage">
           <div class="graph-svg-wrap" id="graphSvgWrap">
@@ -1109,15 +1115,16 @@ async function mountGraph(graphData) {
   const linkLayer = viewport.append("g").attr("class", "graph-links");
   const nodeLayer = viewport.append("g").attr("class", "graph-nodes");
 
-  const zoom = d3.zoom().scaleExtent([0.4, 2.5]).on("zoom", (event) => viewport.attr("transform", event.transform));
+  const zoom = d3.zoom().scaleExtent([0.3, 3]).on("zoom", (event) => viewport.attr("transform", event.transform));
   svg.call(zoom).on("dblclick.zoom", null);
   svg.on("click", () => selectGraphNode(null, graphData));
 
   const linkSel = linkLayer.selectAll("line").data(links).join("line")
     .attr("class", (d) => `graph-link graph-link-${d.kind}`)
-    .attr("stroke", (d) => (d.kind === "tag" ? "#c9d8da" : evidenceColor(d.evidenceLevel)))
-    .attr("stroke-width", (d) => (d.kind === "tag" ? 1.4 : ({ Strong: 2.6, Moderate: 1.8, Weak: 1.2 }[d.evidenceLevel] || 1.2)))
-    .attr("stroke-dasharray", (d) => (d.kind === "tag" ? "3,3" : null));
+    .attr("stroke", (d) => (d.kind === "tag" ? "#b9ccce" : evidenceColor(d.evidenceLevel)))
+    .attr("stroke-width", (d) => (d.kind === "tag" ? 1.4 : ({ Strong: 2.8, Moderate: 2, Weak: 1.3 }[d.evidenceLevel] || 1.3)))
+    .attr("stroke-linecap", "round")
+    .attr("stroke-dasharray", (d) => (d.kind === "tag" ? "3,4" : null));
 
   const nodeSel = nodeLayer.selectAll("g.gnode").data(nodes, (d) => d.id).join((enter) => {
     const g = enter.append("g").attr("class", (d) => `gnode gnode-${d.kind}`);
@@ -1131,11 +1138,11 @@ async function mountGraph(graphData) {
     .attr("r", graphNodeRadius)
     .attr("fill", graphNodeFill)
     .attr("stroke", "#fff")
-    .attr("stroke-width", 1.5);
+    .attr("stroke-width", 2);
 
   nodeSel.select("text")
-    .text((d) => (d.kind === "paper" ? "" : shorten(d.label, 22)))
-    .attr("dy", (d) => graphNodeRadius(d) + 12)
+    .text((d) => (d.kind === "paper" ? "" : shorten(d.label, 24)))
+    .attr("dy", (d) => graphNodeRadius(d) + 13)
     .attr("text-anchor", "middle");
 
   nodeSel.select("title")
@@ -1145,6 +1152,12 @@ async function mountGraph(graphData) {
   nodeSel.on("click", (event, d) => {
     event.stopPropagation();
     selectGraphNode(d.id, graphData);
+  });
+  nodeSel.on("mouseenter", (event, d) => {
+    if (!graphSelectedId) applyDimByNeighborhood(d.id);
+  });
+  nodeSel.on("mouseleave", () => {
+    if (!graphSelectedId) applyDimByNeighborhood(null);
   });
 
   nodeSel.call(d3.drag()
@@ -1162,12 +1175,14 @@ async function mountGraph(graphData) {
       graphNodePositions.set(d.id, { x: d.x, y: d.y, vx: 0, vy: 0, fx: d.x, fy: d.y });
     }));
 
+  let hasAutoFitted = false;
+
   const sim = d3.forceSimulation(nodes)
     .force("link", d3.forceLink(links).id((d) => d.id)
-      .distance((l) => (l.kind === "tag" ? 85 : 65))
-      .strength((l) => (l.kind === "tag" ? 0.4 : 0.55)))
-    .force("charge", d3.forceManyBody().strength((d) => (d.kind === "topic" ? -240 : d.kind === "tag" ? -130 : -70)))
-    .force("collide", d3.forceCollide().radius((d) => graphNodeRadius(d) + 8))
+      .distance((l) => (l.kind === "tag" ? 110 : 85))
+      .strength((l) => (l.kind === "tag" ? 0.35 : 0.5)))
+    .force("charge", d3.forceManyBody().strength((d) => (d.kind === "topic" ? -340 : d.kind === "tag" ? -190 : -110)))
+    .force("collide", d3.forceCollide().radius((d) => graphNodeRadius(d) + 16))
     .force("center", d3.forceCenter(GRAPH_WIDTH / 2, GRAPH_HEIGHT / 2))
     .force("x", d3.forceX(GRAPH_WIDTH / 2).strength(0.02))
     .force("y", d3.forceY(GRAPH_HEIGHT / 2).strength(0.02))
@@ -1178,7 +1193,15 @@ async function mountGraph(graphData) {
         .attr("x1", (d) => d.source.x).attr("y1", (d) => d.source.y)
         .attr("x2", (d) => d.target.x).attr("y2", (d) => d.target.y);
       nodeSel.attr("transform", (d) => `translate(${d.x},${d.y})`);
+      if (!hasAutoFitted && sim.alpha() < 0.05) {
+        hasAutoFitted = true;
+        fitGraphView(svg, zoom, nodes, d3);
+      }
     });
+
+  document.getElementById("graphZoomInButton").onclick = () => svg.transition().duration(200).call(zoom.scaleBy, 1.3);
+  document.getElementById("graphZoomOutButton").onclick = () => svg.transition().duration(200).call(zoom.scaleBy, 1 / 1.3);
+  document.getElementById("graphFitButton").onclick = () => fitGraphView(svg, zoom, nodes, d3);
 
   graphSim = sim;
   graphLiveNodeSel = nodeSel;
@@ -1186,11 +1209,29 @@ async function mountGraph(graphData) {
   graphLiveNodes = nodes;
   graphLiveLinks = links;
   if (graphSelectedId) selectGraphNode(graphSelectedId, graphData);
+  else if (graphNodePositions.size) fitGraphView(svg, zoom, nodes, d3);
+}
+
+function fitGraphView(svg, zoom, nodes, d3) {
+  if (!nodes.length) return;
+  const pad = 60;
+  const xs = nodes.map((n) => n.x ?? GRAPH_WIDTH / 2);
+  const ys = nodes.map((n) => n.y ?? GRAPH_HEIGHT / 2);
+  const minX = Math.min(...xs) - pad;
+  const maxX = Math.max(...xs) + pad;
+  const minY = Math.min(...ys) - pad;
+  const maxY = Math.max(...ys) + pad;
+  const w = Math.max(1, maxX - minX);
+  const h = Math.max(1, maxY - minY);
+  const scale = Math.min(2, Math.max(0.35, Math.min(GRAPH_WIDTH / w, GRAPH_HEIGHT / h)));
+  const tx = GRAPH_WIDTH / 2 - scale * (minX + maxX) / 2;
+  const ty = GRAPH_HEIGHT / 2 - scale * (minY + maxY) / 2;
+  svg.transition().duration(450).call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
 }
 
 function selectGraphNode(id, graphData) {
   graphSelectedId = id;
-  applyGraphSelectionStyles();
+  applyDimByNeighborhood(id);
   const panel = document.getElementById("graphDetail");
   if (!panel) return;
   if (!id) {
@@ -1201,25 +1242,25 @@ function selectGraphNode(id, graphData) {
   panel.innerHTML = node ? renderGraphDetailHtml(node, graphData) : graphDetailPlaceholder();
 }
 
-function applyGraphSelectionStyles() {
+function applyDimByNeighborhood(id) {
   if (!graphLiveNodeSel || !graphLiveLinkSel) return;
-  if (!graphSelectedId) {
+  if (!id) {
     graphLiveNodeSel.classed("dim", false);
     graphLiveLinkSel.classed("dim", false);
     return;
   }
-  const neighborIds = new Set([graphSelectedId]);
+  const neighborIds = new Set([id]);
   graphLiveLinks.forEach((l) => {
     const sourceId = typeof l.source === "object" ? l.source.id : l.source;
     const targetId = typeof l.target === "object" ? l.target.id : l.target;
-    if (sourceId === graphSelectedId) neighborIds.add(targetId);
-    if (targetId === graphSelectedId) neighborIds.add(sourceId);
+    if (sourceId === id) neighborIds.add(targetId);
+    if (targetId === id) neighborIds.add(sourceId);
   });
   graphLiveNodeSel.classed("dim", (d) => !neighborIds.has(d.id));
   graphLiveLinkSel.classed("dim", (d) => {
     const sourceId = typeof d.source === "object" ? d.source.id : d.source;
     const targetId = typeof d.target === "object" ? d.target.id : d.target;
-    return sourceId !== graphSelectedId && targetId !== graphSelectedId;
+    return sourceId !== id && targetId !== id;
   });
 }
 

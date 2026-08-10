@@ -717,6 +717,19 @@ input:focus, select:focus, textarea:focus { outline: 3px solid rgba(15,118,110,.
   color: var(--muted);
 }
 
+.graph-zoom-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.graph-zoom-controls .icon-button {
+  width: 32px;
+  min-height: 32px;
+  font-size: 16px;
+  line-height: 1;
+}
+
 .graph-legend {
   display: flex;
   flex-wrap: wrap;
@@ -751,12 +764,12 @@ input:focus, select:focus, textarea:focus { outline: 3px solid rgba(15,118,110,.
 }
 
 .graph-svg-wrap {
-  height: 600px;
+  height: 660px;
   background:
-    linear-gradient(#f3f7f8 1px, transparent 1px),
-    linear-gradient(90deg, #f3f7f8 1px, transparent 1px),
-    #fbfdfd;
-  background-size: 32px 32px;
+    linear-gradient(#f0f5f6 1px, transparent 1px),
+    linear-gradient(90deg, #f0f5f6 1px, transparent 1px),
+    #fcfefe;
+  background-size: 44px 44px;
   border-right: 1px solid var(--line);
 }
 
@@ -771,22 +784,25 @@ input:focus, select:focus, textarea:focus { outline: 3px solid rgba(15,118,110,.
 }
 
 .gnode text {
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 850;
   fill: var(--ink);
   paint-order: stroke;
-  stroke: #fbfdfd;
-  stroke-width: 3px;
+  stroke: #fcfefe;
+  stroke-width: 4px;
+  stroke-linejoin: round;
   pointer-events: none;
 }
 
 .gnode circle {
-  transition: stroke-width .15s ease;
+  transition: stroke-width .15s ease, filter .15s ease;
+  filter: drop-shadow(0 2px 3px rgba(16, 40, 47, .16));
 }
 
 .gnode:hover circle {
   stroke: var(--navy);
-  stroke-width: 2.5px;
+  stroke-width: 3px;
+  filter: drop-shadow(0 3px 6px rgba(16, 40, 47, .26));
 }
 
 .graph-link,
