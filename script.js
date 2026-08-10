@@ -87,6 +87,18 @@ function getInitials(text) {
   return clean.slice(0, 2).toUpperCase();
 }
 
+// Deterministic per-person avatar color (hashed from email/nickname) so members
+// are visually distinguishable at a glance instead of every avatar sharing the
+// same fixed teal gradient. Lightness is kept mid-range across the whole hue
+// wheel so white avatar text stays readable regardless of the resulting hue.
+function avatarGradient(seed) {
+  const key = String(seed || '').trim().toLowerCase();
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = key.charCodeAt(i) + ((hash << 5) - hash);
+  const hue = Math.abs(hash) % 360;
+  return 'linear-gradient(135deg, hsl(' + hue + ', 60%, 58%), hsl(' + hue + ', 65%, 38%))';
+}
+
 // -------------------- Members Drawer (Thành Viên) --------------------
 
 let SCIENCE_MEMBERS = [];
@@ -251,7 +263,7 @@ function renderMembersList() {
     return `
       <div class="member-item-card" title="${member.email} (${member.group_key || 'science'})">
         <div class="member-avatar-box">
-          <div class="member-avatar-circle">${initials}</div>
+          <div class="member-avatar-circle" style="background:${avatarGradient(member.email)}">${initials}</div>
           <div class="status-dot-indicator ${statusDotClass}"></div>
         </div>
         <div class="member-content">
@@ -305,6 +317,7 @@ document.addEventListener('click', (e) => {
 
 async function resolveUserProfile(user) {
   CURRENT_USER.email = user.email;
+  CURRENT_USER.id = user.id;
 
   try {
     const info = await API.auth.getUserInfo(user.email);
@@ -384,8 +397,9 @@ async function initAuth() {
         logPipelineEvent(`Đã đăng nhập tài khoản: ${user.email}`, 'success', 'USER_LOGIN');
       }
     } else {
-      CURRENT_USER = { email: '', nickname: '', groupKey: '' };
+      CURRENT_USER = { email: '', nickname: '', groupKey: '', id: '' };
       if (typeof stopRealtimeSync === 'function') stopRealtimeSync();
+      if (chatChannel && sbClient) { sbClient.removeChannel(chatChannel); chatChannel = null; }
       lockApp();
     }
   });
@@ -717,12 +731,12 @@ function skeletonListItems(count) {
 
 // -------------------- Section navigation (Tổng Quan / Pipeline / Task / Progress / Calendar / Drive / My Tasks) --------------------
 
-const SECTION_KEYS = ['dashboard', 'pipeline', 'task', 'progress', 'calendar', 'drive', 'mytasks'];
+const SECTION_KEYS = ['dashboard', 'chat', 'pipeline', 'journal', 'task', 'progress', 'calendar', 'drive', 'mytasks'];
 
 // Cờ tải-một-lần cho các section được nạp lười (chỉ gọi API lần đầu ghé thăm).
 // Pipeline/Task/Progress/Calendar không có mặt ở đây vì dữ liệu của chúng đã được
 // nạp sẵn ngay sau khi đăng nhập (xem resolveUserProfile ở trên).
-const SECTION_LOADED = { dashboard: false, drive: false, mytasks: false };
+const SECTION_LOADED = { dashboard: false, drive: false, mytasks: false, chat: false, journal: false };
 
 function switchSection(name) {
   document.querySelectorAll('.app-section').forEach(el => el.classList.remove('active'));
@@ -742,7 +756,403 @@ function switchSection(name) {
   } else if (name === 'mytasks' && !SECTION_LOADED.mytasks) {
     SECTION_LOADED.mytasks = true;
     loadMyTasks();
+  } else if (name === 'chat' && !SECTION_LOADED.chat) {
+    SECTION_LOADED.chat = true;
+    loadChatMessages();
+  } else if (name === 'journal' && !SECTION_LOADED.journal) {
+    SECTION_LOADED.journal = true;
+    loadJournalList();
+  } else if (name === 'task') {
+    renderProjectManagerList();
   }
+}
+
+// -------------------- Chat (Trò Chuyện) --------------------
+
+let chatChannel = null;
+let currentChatReply = null;
+let chatMessagesCache = [];
+const CHAT_EMOJI_LIST = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
+function formatChatTime(timestamp) {
+  const date = new Date(timestamp);
+  if (isNaN(date.getTime())) return '';
+  const now = new Date();
+  const timeStr = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+  if (isToday) return timeStr;
+  return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) + ', ' + timeStr;
+}
+
+function formatChatText(text) {
+  let html = escapeHtml(text);
+  html = html.replace(/@All/gi, '<span class="chat-mention-tag">@All</span>');
+  SCIENCE_MEMBERS.map(m => m.nickname).filter(Boolean).forEach(name => {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp('@' + escaped, 'gi');
+    html = html.replace(re, (m) => m.includes('<span') ? m : '<span class="chat-mention-tag">' + m + '</span>');
+  });
+  return html;
+}
+
+function renderChatMessage(msg) {
+  const list = document.getElementById('chat-messages-list');
+  if (!list) return;
+  const emptyState = list.querySelector('.empty-state');
+  if (emptyState) emptyState.remove();
+
+  const isMe = !!(CURRENT_USER.id && msg.uid === CURRENT_USER.id);
+  const isPinned = !!msg.is_pinned;
+
+  const reactions = msg.reactions || {};
+  const counts = {};
+  let myReaction = null;
+  Object.keys(reactions).forEach(uid => {
+    const icon = reactions[uid];
+    counts[icon] = (counts[icon] || 0) + 1;
+    if (uid === CURRENT_USER.id) myReaction = icon;
+  });
+  const reactionHtml = Object.keys(counts).length
+    ? '<div class="chat-reaction-bar">' + Object.keys(counts).map(icon =>
+        '<span class="chat-reaction-bubble' + (icon === myReaction ? ' is-mine' : '') + '" onclick="toggleChatReaction(\'' + msg.id + '\',\'' + icon + '\')">' + icon + ' ' + counts[icon] + '</span>'
+      ).join('') + '</div>'
+    : '';
+
+  const replyHtml = msg.reply_to
+    ? '<div class="chat-reply-quote"><strong>' + escapeHtml(msg.reply_to.name) + '</strong>' + escapeHtml(msg.reply_to.text) + '</div>'
+    : '';
+
+  const emojiButtons = CHAT_EMOJI_LIST.map(em => '<span onclick="toggleChatReaction(\'' + msg.id + '\',\'' + em + '\')">' + em + '</span>').join('');
+
+  let div = document.getElementById('chat-msg-' + msg.id);
+  if (!div) {
+    div = document.createElement('div');
+    div.id = 'chat-msg-' + msg.id;
+    list.appendChild(div);
+  }
+  div.className = 'chat-msg-row ' + (isMe ? 'is-me' : 'is-other');
+
+  const senderLabel = !isMe ? '<div class="chat-msg-sender">' + escapeHtml(msg.display_name || '') + '</div>' : '';
+  const nameArg = escapeHtml(escapeJs(msg.display_name || ''));
+  const textArg = escapeHtml(escapeJs(msg.text || ''));
+  const pinIcon = isPinned ? '<i class="fa-solid fa-thumbtack"></i> ' : '';
+
+  div.innerHTML =
+    senderLabel +
+    '<div class="chat-msg-bubble ' + (isMe ? 'is-me' : 'is-other') + (isPinned ? ' is-pinned' : '') + '">' +
+    replyHtml +
+    '<span>' + formatChatText(msg.text) + '</span>' +
+    '<span class="chat-msg-time">' + pinIcon + formatChatTime(msg.created_at) + '</span>' +
+    '</div>' +
+    reactionHtml +
+    '<div class="chat-msg-actions">' +
+    '<div class="chat-emoji-wrap">' +
+    '<button type="button" class="icon-btn chat-msg-action-btn" title="Thả cảm xúc" onclick="toggleChatEmojiPicker(\'' + msg.id + '\')"><i class="fa-regular fa-face-smile"></i></button>' +
+    '<div class="chat-emoji-popup" id="chat-emoji-' + msg.id + '">' + emojiButtons + '</div>' +
+    '</div>' +
+    '<button type="button" class="icon-btn chat-msg-action-btn" title="Trả lời" onclick="startChatReply(\'' + msg.id + '\',\'' + nameArg + '\',\'' + textArg + '\')"><i class="fa-solid fa-reply"></i></button>' +
+    '<button type="button" class="icon-btn chat-msg-action-btn" title="' + (isPinned ? 'Bỏ ghim' : 'Ghim') + '" onclick="toggleChatPin(\'' + msg.id + '\', ' + isPinned + ')"><i class="fa-solid fa-thumbtack"></i></button>' +
+    '</div>';
+}
+
+function renderChatPinnedBar() {
+  const bar = document.getElementById('chat-pinned-bar');
+  const list = document.getElementById('chat-pinned-list');
+  if (!bar || !list) return;
+  const pinned = chatMessagesCache.filter(m => m.is_pinned).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  if (!pinned.length) { bar.style.display = 'none'; list.innerHTML = ''; return; }
+  bar.style.display = 'flex';
+  list.innerHTML = pinned.map(m =>
+    '<div class="chat-pinned-item"><span><strong>' + escapeHtml(m.display_name || '') + ':</strong> ' + escapeHtml(m.text || '') + '</span>' +
+    '<button type="button" class="icon-btn chat-msg-action-btn" title="Bỏ ghim" onclick="toggleChatPin(\'' + m.id + '\', true)"><i class="fa-solid fa-xmark"></i></button></div>'
+  ).join('');
+}
+
+function toggleChatEmojiPicker(msgId) {
+  document.querySelectorAll('.chat-emoji-popup.open').forEach(el => {
+    if (el.id !== 'chat-emoji-' + msgId) el.classList.remove('open');
+  });
+  const popup = document.getElementById('chat-emoji-' + msgId);
+  if (popup) popup.classList.toggle('open');
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.chat-emoji-wrap')) {
+    document.querySelectorAll('.chat-emoji-popup.open').forEach(el => el.classList.remove('open'));
+  }
+});
+
+async function toggleChatReaction(msgId, emoji) {
+  if (!CURRENT_USER.id) return;
+  const popup = document.getElementById('chat-emoji-' + msgId);
+  if (popup) popup.classList.remove('open');
+  try {
+    const { data, error } = await sbClient.from('messages').select('reactions').eq('id', msgId).single();
+    if (error) throw error;
+    const reactions = data.reactions || {};
+    if (reactions[CURRENT_USER.id] === emoji) delete reactions[CURRENT_USER.id];
+    else reactions[CURRENT_USER.id] = emoji;
+    const { error: updateError } = await sbClient.from('messages').update({ reactions }).eq('id', msgId);
+    if (updateError) throw updateError;
+  } catch (err) {
+    console.error('Lỗi thả cảm xúc:', err);
+  }
+}
+
+function startChatReply(id, name, text) {
+  currentChatReply = { id, name, text };
+  const bar = document.getElementById('chat-reply-preview');
+  const nameEl = document.getElementById('chat-reply-name');
+  const textEl = document.getElementById('chat-reply-text');
+  if (nameEl) nameEl.textContent = 'Trả lời ' + name;
+  if (textEl) textEl.textContent = text;
+  if (bar) bar.style.display = 'flex';
+  const input = document.getElementById('chat-msg-input');
+  if (input) input.focus();
+}
+
+function cancelChatReply() {
+  currentChatReply = null;
+  const bar = document.getElementById('chat-reply-preview');
+  if (bar) bar.style.display = 'none';
+}
+
+async function toggleChatPin(msgId, currentStatus) {
+  try {
+    const { error } = await sbClient.from('messages').update({ is_pinned: !currentStatus }).eq('id', msgId);
+    if (error) throw error;
+  } catch (err) {
+    console.error('Lỗi ghim tin nhắn:', err);
+    showToast('Không thể ghim tin nhắn.', 'error');
+  }
+}
+
+async function loadChatMessages() {
+  const list = document.getElementById('chat-messages-list');
+  if (!list || !sbClient) return;
+  list.innerHTML = '<div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> Đang tải tin nhắn...</div>';
+
+  const { data, error } = await sbClient.from('messages')
+    .select('*')
+    .eq('group_key', 'science')
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (error) {
+    console.error('Lỗi tải tin nhắn:', error);
+    list.innerHTML = '<div class="empty-state">Không thể tải tin nhắn. Vui lòng thử lại sau.</div>';
+    return;
+  }
+
+  chatMessagesCache = (data || []).slice().reverse();
+  list.innerHTML = chatMessagesCache.length ? '' : '<div class="empty-state"><i class="fa-solid fa-comment-slash"></i> Chưa có tin nhắn nào. Hãy là người đầu tiên!</div>';
+  chatMessagesCache.forEach(msg => renderChatMessage(msg));
+  renderChatPinnedBar();
+  list.scrollTop = list.scrollHeight;
+
+  renderChatPresenceList();
+  loadScienceMembers().then(() => renderChatPresenceList()).catch(() => {});
+
+  const input = document.getElementById('chat-msg-input');
+  const sendBtn = document.getElementById('chat-send-btn');
+  if (input) input.disabled = false;
+  if (sendBtn) sendBtn.disabled = false;
+
+  if (chatChannel) sbClient.removeChannel(chatChannel);
+  chatChannel = sbClient.channel('sci-chat-channel')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: 'group_key=eq.science' }, payload => {
+      if (payload.eventType === 'DELETE') {
+        const el = document.getElementById('chat-msg-' + payload.old.id);
+        if (el) el.remove();
+        chatMessagesCache = chatMessagesCache.filter(m => m.id !== payload.old.id);
+        renderChatPinnedBar();
+        return;
+      }
+      const msg = payload.new;
+      const idx = chatMessagesCache.findIndex(m => m.id === msg.id);
+      const wasAtBottom = (list.scrollHeight - list.scrollTop - list.clientHeight) < 80;
+      if (idx >= 0) chatMessagesCache[idx] = msg;
+      else chatMessagesCache.push(msg);
+
+      const emptyState = list.querySelector('.empty-state');
+      if (emptyState) emptyState.remove();
+      renderChatMessage(msg);
+      renderChatPinnedBar();
+
+      if (payload.eventType === 'INSERT' && wasAtBottom) list.scrollTop = list.scrollHeight;
+    })
+    .subscribe();
+}
+
+async function sendChatMessage(event) {
+  if (event) event.preventDefault();
+  const input = document.getElementById('chat-msg-input');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text || !CURRENT_USER.id) return;
+
+  const payload = {
+    text,
+    uid: CURRENT_USER.id,
+    display_name: CURRENT_USER.nickname || CURRENT_USER.email,
+    is_pinned: false,
+    group_key: 'science'
+  };
+  if (currentChatReply) {
+    payload.reply_to = { id: currentChatReply.id, name: currentChatReply.name, text: currentChatReply.text };
+  }
+
+  input.value = '';
+  cancelChatReply();
+
+  try {
+    const { error } = await sbClient.from('messages').insert(payload);
+    if (error) throw error;
+  } catch (err) {
+    console.error('Lỗi gửi tin nhắn:', err);
+    showToast('Không thể gửi tin nhắn. Vui lòng thử lại.', 'error');
+    input.value = text;
+  }
+}
+
+function renderChatPresenceList() {
+  const list = document.getElementById('chat-presence-list');
+  const countEl = document.getElementById('chat-presence-online-count');
+  if (!list) return;
+
+  if (!SCIENCE_MEMBERS.length) {
+    list.innerHTML = '<div class="empty-state"><i class="fa-solid fa-user-slash"></i> Chưa có dữ liệu thành viên</div>';
+    if (countEl) countEl.textContent = '0';
+    return;
+  }
+
+  const sorted = SCIENCE_MEMBERS.slice().sort((a, b) => (b.isOnline ? 1 : 0) - (a.isOnline ? 1 : 0));
+  if (countEl) countEl.textContent = String(sorted.filter(m => m.isOnline).length);
+
+  list.innerHTML = sorted.map(member => {
+    const initials = getInitials(member.nickname || member.email);
+    const statusDotClass = member.isOnline ? 'online' : 'offline';
+    const statusText = member.isOnline ? 'Đang hoạt động' : timeAgoVietnamese(member.last_changed);
+    const isMe = (member.email || '').toLowerCase() === (CURRENT_USER.email || '').toLowerCase();
+
+    return `
+      <div class="member-item-card chat-presence-item" title="${escapeHtml(member.email)}">
+        <div class="member-avatar-box">
+          <div class="member-avatar-circle" style="background:${avatarGradient(member.email)}">${escapeHtml(initials)}</div>
+          <div class="status-dot-indicator ${statusDotClass}"></div>
+        </div>
+        <div class="member-content">
+          <div class="member-email-title">
+            <span>${escapeHtml(member.nickname || member.email)}</span>
+            ${isMe ? '<span class="member-badge-pill">Bạn</span>' : ''}
+          </div>
+          <div class="member-activity-status ${statusDotClass}"><span>${escapeHtml(statusText)}</span></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// -------------------- Chat @mention autocomplete --------------------
+
+let chatMentionMatches = [];
+let chatMentionActiveIndex = -1;
+let chatMentionAtPos = -1;
+
+function chatMentionCandidates() {
+  const list = SCIENCE_MEMBERS.filter(m => m.nickname).map(m => ({ label: m.nickname }));
+  list.unshift({ label: 'All' });
+  return list;
+}
+
+function updateChatMentionDropdown() {
+  const input = document.getElementById('chat-msg-input');
+  const dropdown = document.getElementById('chat-mention-dropdown');
+  if (!input || !dropdown) return;
+
+  const text = input.value;
+  const caret = input.selectionStart;
+  const at = text.lastIndexOf('@', caret - 1);
+
+  if (at === -1) { closeChatMentionDropdown(); return; }
+  const fragment = text.slice(at + 1, caret);
+  if (fragment.includes('\n') || fragment.length > 24) { closeChatMentionDropdown(); return; }
+
+  const query = fragment.toLowerCase();
+  const matches = chatMentionCandidates().filter(c => c.label.toLowerCase().includes(query));
+  if (!matches.length) { closeChatMentionDropdown(); return; }
+
+  chatMentionMatches = matches;
+  chatMentionActiveIndex = 0;
+  chatMentionAtPos = at;
+
+  dropdown.innerHTML = matches.map((c, i) =>
+    '<div class="chat-mention-item' + (i === 0 ? ' active' : '') + '" onmousedown="event.preventDefault(); pickChatMention(' + i + ')">' +
+    '<span class="chat-mention-avatar" style="background:' + avatarGradient(c.label) + '">' + escapeHtml(getInitials(c.label)) + '</span>' +
+    '<span>' + escapeHtml(c.label) + '</span>' +
+    '</div>'
+  ).join('');
+  dropdown.style.display = 'block';
+}
+
+function closeChatMentionDropdown() {
+  const dropdown = document.getElementById('chat-mention-dropdown');
+  if (dropdown) { dropdown.style.display = 'none'; dropdown.innerHTML = ''; }
+  chatMentionMatches = [];
+  chatMentionActiveIndex = -1;
+  chatMentionAtPos = -1;
+}
+
+function highlightChatMentionActive() {
+  document.querySelectorAll('#chat-mention-dropdown .chat-mention-item').forEach((el, i) => {
+    el.classList.toggle('active', i === chatMentionActiveIndex);
+  });
+}
+
+function pickChatMention(index) {
+  const input = document.getElementById('chat-msg-input');
+  const match = chatMentionMatches[index];
+  if (!input || !match || chatMentionAtPos === -1) { closeChatMentionDropdown(); return; }
+
+  const caret = input.selectionStart;
+  const before = input.value.slice(0, chatMentionAtPos);
+  const after = input.value.slice(caret);
+  const insertion = '@' + match.label + ' ';
+  input.value = before + insertion + after;
+
+  const newCaret = (before + insertion).length;
+  input.setSelectionRange(newCaret, newCaret);
+  input.focus();
+  closeChatMentionDropdown();
+}
+
+function handleChatMentionKeydown(e) {
+  const dropdown = document.getElementById('chat-mention-dropdown');
+  if (!dropdown || dropdown.style.display !== 'block' || !chatMentionMatches.length) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    chatMentionActiveIndex = (chatMentionActiveIndex + 1) % chatMentionMatches.length;
+    highlightChatMentionActive();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    chatMentionActiveIndex = (chatMentionActiveIndex - 1 + chatMentionMatches.length) % chatMentionMatches.length;
+    highlightChatMentionActive();
+  } else if (e.key === 'Enter' || e.key === 'Tab') {
+    e.preventDefault();
+    pickChatMention(chatMentionActiveIndex);
+  } else if (e.key === 'Escape') {
+    closeChatMentionDropdown();
+  }
+}
+
+const chatInputForm = document.getElementById('chat-input-form');
+if (chatInputForm) chatInputForm.addEventListener('submit', sendChatMessage);
+
+const chatMsgInputEl = document.getElementById('chat-msg-input');
+if (chatMsgInputEl) {
+  chatMsgInputEl.addEventListener('input', updateChatMentionDropdown);
+  chatMsgInputEl.addEventListener('keydown', handleChatMentionKeydown);
+  chatMsgInputEl.addEventListener('blur', () => setTimeout(closeChatMentionDropdown, 150));
 }
 
 // -------------------- Task render helpers --------------------
@@ -892,6 +1302,7 @@ async function loadProjectOverview(options) {
       if (!globalAllProjects.length) {
         if (tableBody) tableBody.innerHTML = `<tr><td colspan="${colSpanCount}" class="empty-state">Chưa có dự án nào.</td></tr>`;
         loadMemberCheckboxes();
+        if (typeof renderProjectManagerList === 'function') renderProjectManagerList();
         return;
       }
 
@@ -927,6 +1338,7 @@ async function loadProjectOverview(options) {
 
       loadMemberCheckboxes();
       renderProgressTable();
+      if (typeof renderProjectManagerList === 'function') renderProjectManagerList();
 
     } else if (!quiet) {
       if (tableBody) tableBody.innerHTML = `<tr><td colspan="${colSpanCount}" class="empty-state">Lỗi Server: ${escapeHtml(response.message)}</td></tr>`;
@@ -955,16 +1367,24 @@ function renderProgressTable() {
   const colSpanCount = 7;
   const filterOwnerDropdown = document.getElementById('progress-search-input');
   const filterProjectDropdown = document.getElementById('progress-project-filter');
+  const filterStatusDropdown = document.getElementById('progress-status-filter');
+  const nameSearchInput = document.getElementById('progress-name-search');
   const sortSelect = document.getElementById('progress-sort-select');
 
   const filterOwner = filterOwnerDropdown ? filterOwnerDropdown.value : '';
   const filterProject = filterProjectDropdown ? filterProjectDropdown.value : '';
+  const filterStatus = filterStatusDropdown ? filterStatusDropdown.value : '';
+  const nameSearch = nameSearchInput ? nameSearchInput.value.trim().toLowerCase() : '';
   const sortVal = sortSelect ? sortSelect.value : 'date_desc';
 
   let projects = (globalAllProjects || []).filter(p => {
     const matchOwner = !filterOwner || p.owner === filterOwner;
     const matchProject = !filterProject || p.name === filterProject;
-    return matchOwner && matchProject;
+    const matchStatus = !filterStatus || p.status === filterStatus;
+    const matchSearch = !nameSearch
+      || (p.name || '').toLowerCase().includes(nameSearch)
+      || (p.description || '').toLowerCase().includes(nameSearch);
+    return matchOwner && matchProject && matchStatus && matchSearch;
   });
 
   if (sortVal === 'percent_desc') {
@@ -1326,14 +1746,14 @@ async function handleProjectCreationOrUpdate() {
 
 function shareProjectAction(projectId, projectName) {
   Swal.fire({
-    title: 'Chia sẻ Dự án?',
-    html: `Bạn có muốn sao chép dự án <b>"${escapeHtml(projectName)}"</b> và toàn bộ công việc sang Dashboard Chung không?<br><small style="color: var(--text-muted);">(Sẽ tạo một bản sao mới)</small>`,
+    title: 'Chia sẻ dự án lên WorkHub Org?',
+    html: `Dự án <b>"${escapeHtml(projectName)}"</b> sẽ được hiển thị trên Dashboard Chung của WorkHub Org.<br><small style="color: var(--text-muted);">Đây là chia sẻ trực tiếp — không tạo bản sao, mọi cập nhật sau này (tiến độ, công việc...) sẽ luôn tự động đồng bộ.</small>`,
     icon: 'question',
     showCancelButton: true,
     confirmButtonColor: 'var(--cyan-accent)',
     cancelButtonColor: 'var(--text-muted)',
-    confirmButtonText: 'Chia sẻ cho thầy đi!',
-    cancelButtonText: 'Thôi'
+    confirmButtonText: 'Chia sẻ',
+    cancelButtonText: 'Huỷ'
   }).then(async (result) => {
     if (!result.isConfirmed) return;
 
@@ -1376,6 +1796,8 @@ async function loadTasksForProject(projectId, options) {
 
   if (!projectId) {
     if (tableBody) tableBody.innerHTML = '<tr><td colspan="7" class="empty-state">Vui lòng chọn dự án để xem công việc.</td></tr>';
+    const filesCard = document.getElementById('task-project-files-card');
+    if (filesCard) filesCard.style.display = 'none';
     return;
   }
 
@@ -1403,6 +1825,7 @@ async function loadTasksForProject(projectId, options) {
 
       populateLabelFilter();
       applyTaskFilters();
+      loadProjectFiles(projectId);
 
     } else {
       if (!quiet && tableBody) tableBody.innerHTML = `<tr><td colspan="7" class="empty-state">Lỗi: ${escapeHtml(response.message)}</td></tr>`;
@@ -1413,6 +1836,273 @@ async function loadTasksForProject(projectId, options) {
     if (!quiet && tableBody) tableBody.innerHTML = '<tr><td colspan="7" class="empty-state">Lỗi kết nối server!</td></tr>';
     showToast('Lỗi kết nối: ' + err.message, 'error');
   }
+}
+
+// -------------------- Quản lý dự án (trong section Nhiệm Vụ) --------------------
+// Danh sách toàn bộ dự án (không chỉ dự án đang chọn), lọc theo trạng thái/tên,
+// để tìm nhanh các dự án đã hoàn thành (Completed) v.v. Đọc từ cache globalAllProjects
+// đã được loadProjectOverview() nạp sẵn ngay sau đăng nhập — không gọi API riêng.
+
+let projectManagerPanelCollapsed = false;
+
+function toggleProjectManagerPanel() {
+  projectManagerPanelCollapsed = !projectManagerPanelCollapsed;
+  const body = document.getElementById('task-project-manager-body');
+  const btn = document.getElementById('task-project-manager-toggle-btn');
+  if (body) body.style.display = projectManagerPanelCollapsed ? 'none' : 'block';
+  if (btn) btn.innerHTML = `<i class="fa-solid ${projectManagerPanelCollapsed ? 'fa-chevron-down' : 'fa-chevron-up'}"></i>`;
+}
+
+function renderProjectManagerList() {
+  const tbody = document.getElementById('task-project-manager-body-list');
+  const countBadge = document.getElementById('task-project-manager-count');
+  if (!tbody) return;
+
+  const statusFilter = document.getElementById('task-project-status-filter');
+  const searchInput = document.getElementById('task-project-search');
+  const filterStatus = statusFilter ? statusFilter.value : '';
+  const search = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+  const projects = (globalAllProjects || []).filter(p => {
+    const matchStatus = !filterStatus || p.status === filterStatus;
+    const matchSearch = !search || (p.name || '').toLowerCase().includes(search);
+    return matchStatus && matchSearch;
+  });
+
+  if (countBadge) countBadge.textContent = String((globalAllProjects || []).length);
+
+  if (projects.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Không tìm thấy dự án phù hợp.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = projects.map(p => {
+    const isSelected = p.id === currentTaskProjectID;
+    const safeIdArg = escapeHtml(escapeJs(p.id));
+    return `
+    <tr style="${isSelected ? 'background: var(--hover-bg);' : ''}">
+      <td style="font-weight:600;">${escapeHtml(p.name)}</td>
+      <td>${p.status ? `<span class="status-pill pill-neutral" style="font-size:10px; padding:1px 8px;">${escapeHtml(p.status)}</span>` : ''}</td>
+      <td>
+        <div class="progress">
+          <div class="progress-bar ${getProgressBarColor(p.percent)}" style="width: ${p.percent}%;">${p.percent}%</div>
+        </div>
+      </td>
+      <td style="font-size:13px; color: var(--text-secondary);">${escapeHtml(p.lastUpdated || '')}</td>
+      <td style="text-align:center;">
+        <button type="button" class="btn ${isSelected ? 'btn-secondary' : 'btn-outline'}" style="padding: 4px 10px; font-size:12px;" onclick="selectProjectFromManager('${safeIdArg}')">
+          ${isSelected ? 'Đang xem' : 'Chọn'}
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function selectProjectFromManager(projectId) {
+  const select = document.getElementById('task-project-select');
+  if (select) select.value = projectId;
+  loadTasksForProject(projectId);
+}
+
+// -------------------- Tệp của dự án (upload trực tiếp vào dự án, files.project_id) --------------------
+
+let projectFilesPanelCollapsed = false;
+
+function toggleProjectFilesPanel() {
+  projectFilesPanelCollapsed = !projectFilesPanelCollapsed;
+  const body = document.getElementById('task-project-files-body');
+  const btn = document.getElementById('task-project-files-toggle-btn');
+  if (body) body.style.display = projectFilesPanelCollapsed ? 'none' : 'block';
+  if (btn) btn.innerHTML = `<i class="fa-solid ${projectFilesPanelCollapsed ? 'fa-chevron-down' : 'fa-chevron-up'}"></i>`;
+}
+
+let projectFilesCache = [];
+
+async function loadProjectFiles(projectId) {
+  const card = document.getElementById('task-project-files-card');
+  const list = document.getElementById('task-project-files-list');
+  if (!card || !list) return;
+
+  if (!projectId) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  list.innerHTML = '<div style="padding:8px; color: var(--text-muted); font-size: 12.5px;">Đang tải...</div>';
+
+  try {
+    projectFilesCache = await API.file.list(CURRENT_USER.groupKey, { projectId });
+    renderProjectFilesList();
+  } catch (err) {
+    list.innerHTML = `<div style="padding:8px; color: var(--danger-color); font-size: 12.5px;">Lỗi tải file: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderProjectFilesList() {
+  const list = document.getElementById('task-project-files-list');
+  const countBadge = document.getElementById('task-project-files-count');
+  if (!list) return;
+
+  const items = projectFilesCache || [];
+  if (countBadge) countBadge.textContent = String(items.length);
+
+  if (items.length === 0) {
+    list.innerHTML = '<div style="padding:8px; color: var(--text-muted); font-size: 12.5px;">Chưa có file nào được tải lên dự án này.</div>';
+    return;
+  }
+
+  list.innerHTML = items.map(f => {
+    const relatedTask = f.taskId ? (globalAllTasks || []).find(t => t.id === f.taskId) : null;
+    const taskLabel = relatedTask ? `Công việc: ${escapeHtml(relatedTask.name)} · ` : '';
+    return `
+    <div class="task-attachment-item">
+      <div style="min-width:0; flex:1; overflow:hidden;">
+        <a href="${escapeHtml(f.url || '#')}" target="_blank" rel="noopener"><i class="fa-solid fa-paperclip"></i> ${escapeHtml(f.name || 'Không tên')}</a>
+        <div class="task-attachment-meta">${taskLabel}${escapeHtml((f.uploader || '').split('@')[0])} · ${escapeHtml(f.date || '')}</div>
+      </div>
+      <button type="button" class="icon-btn danger" title="Xóa file" onclick="deleteProjectFileAction('${escapeHtml(escapeJs(f.id))}', '${escapeHtml(escapeJs(f.name || ''))}')">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+    </div>
+  `;
+  }).join('');
+}
+
+let currentTaskFilesPopupTaskId = null;
+
+function openTaskFilesPopup(taskId, taskName) {
+  if (!currentTaskProjectID) { showToast('Vui lòng chọn dự án trước.', 'error'); return; }
+  currentTaskFilesPopupTaskId = taskId;
+  const nameEl = document.getElementById('task-files-modal-name');
+  if (nameEl) nameEl.textContent = taskName || '';
+  openAppModal('task-files-modal');
+  renderTaskFilesModalList();
+}
+
+function renderTaskFilesModalList() {
+  const list = document.getElementById('task-files-modal-list');
+  if (!list || !currentTaskFilesPopupTaskId) return;
+
+  const items = (projectFilesCache || []).filter(f => f.taskId === currentTaskFilesPopupTaskId);
+
+  if (items.length === 0) {
+    list.innerHTML = '<div style="padding:8px; color: var(--text-muted); font-size: 12.5px;">Chưa có file nào cho công việc này.</div>';
+    return;
+  }
+
+  list.innerHTML = items.map(f => `
+    <div class="task-attachment-item">
+      <div style="min-width:0; flex:1; overflow:hidden;">
+        <a href="${escapeHtml(f.url || '#')}" target="_blank" rel="noopener"><i class="fa-solid fa-paperclip"></i> ${escapeHtml(f.name || 'Không tên')}</a>
+        <div class="task-attachment-meta">${escapeHtml((f.uploader || '').split('@')[0])} · ${escapeHtml(f.date || '')}</div>
+      </div>
+      <button type="button" class="icon-btn danger" title="Xóa file" onclick="deleteProjectFileAction('${escapeHtml(escapeJs(f.id))}', '${escapeHtml(escapeJs(f.name || ''))}')">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+    </div>
+  `).join('');
+}
+
+async function handleTaskModalFileUpload() {
+  const input = document.getElementById('task-files-modal-input');
+  const btn = document.getElementById('task-files-modal-upload-btn');
+  if (!input || !input.files || input.files.length === 0) return;
+  const taskId = currentTaskFilesPopupTaskId;
+  if (!taskId) return;
+
+  const file = input.files[0];
+  if (file.size > 5 * 1024 * 1024) { showToast('Tệp quá lớn! Vui lòng chọn tệp < 5MB.', 'error'); input.value = ''; return; }
+
+  const originalText = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang tải...'; }
+
+  const reader = new FileReader();
+  reader.onload = async function (e) {
+    const base64Data = e.target.result.split(',')[1];
+    try {
+      const response = await callGAS('uploadFile', {
+        fileData: base64Data,
+        fileName: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        groupKey: CURRENT_USER.groupKey,
+        description: '',
+        email: CURRENT_USER.email,
+        folderPath: '',
+        projectId: currentTaskProjectID,
+        taskId: taskId
+      });
+      if (response.status !== 'success') throw new Error(response.message);
+      showToast('Tải file lên thành công!', 'success');
+      await loadProjectFiles(currentTaskProjectID);
+      renderTaskFilesModalList();
+    } catch (err) {
+      showToast('Lỗi: ' + err.message, 'error');
+    } finally {
+      input.value = '';
+      if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function handleProjectFileUpload() {
+  const input = document.getElementById('task-project-file-input');
+  const btn = document.getElementById('task-project-file-upload-btn');
+  if (!input || !input.files || input.files.length === 0) return;
+  if (!currentTaskProjectID) { showToast('Vui lòng chọn dự án trước.', 'error'); return; }
+
+  const file = input.files[0];
+  if (file.size > 5 * 1024 * 1024) { showToast('Tệp quá lớn! Vui lòng chọn tệp < 5MB.', 'error'); input.value = ''; return; }
+
+  const originalText = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang tải...'; }
+
+  const reader = new FileReader();
+  reader.onload = async function (e) {
+    const base64Data = e.target.result.split(',')[1];
+    try {
+      const response = await callGAS('uploadFile', {
+        fileData: base64Data,
+        fileName: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        groupKey: CURRENT_USER.groupKey,
+        description: '',
+        email: CURRENT_USER.email,
+        folderPath: '',
+        projectId: currentTaskProjectID
+      });
+      if (response.status !== 'success') throw new Error(response.message);
+      input.value = '';
+      showToast('Tải file lên thành công!', 'success');
+      loadProjectFiles(currentTaskProjectID);
+    } catch (err) {
+      showToast('Lỗi: ' + err.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function deleteProjectFileAction(fileId, fileName) {
+  Swal.fire({
+    title: 'Xóa File?',
+    text: `Bạn có chắc muốn xóa file "${fileName}"?`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: 'var(--danger-color)',
+    cancelButtonColor: 'var(--text-muted)',
+    confirmButtonText: 'Xóa',
+    cancelButtonText: 'Hủy'
+  }).then(async (result) => {
+    if (!result.isConfirmed) return;
+    try {
+      const response = await callGAS('deleteFile', { fileId, groupKey: CURRENT_USER.groupKey });
+      if (response.status !== 'success') throw new Error(response.message);
+      showToast(response.message, 'success');
+      await loadProjectFiles(currentTaskProjectID);
+      if (document.getElementById('task-files-modal').classList.contains('open')) renderTaskFilesModalList();
+    } catch (err) {
+      showToast('Lỗi: ' + err.message, 'error');
+    }
+  });
 }
 
 function renderTasks(tasks) {
@@ -1486,6 +2176,9 @@ function renderTasks(tasks) {
         <button class="icon-btn" title="Bình luận & Lịch sử" onclick="openTaskActivity('${t.id}', '${safeName}')">
           <i class="fa-solid fa-comment-dots"></i>
         </button>
+        <button class="icon-btn" title="Tệp của công việc này" onclick="openTaskFilesPopup('${t.id}', '${safeName}')">
+          <i class="fa-solid fa-upload"></i>
+        </button>
         <button class="icon-btn danger" title="Xóa" onclick="deleteTaskAction('${t.id}', '${safeName}')">
           <i class="fa-solid fa-trash"></i>
         </button>
@@ -1551,6 +2244,7 @@ function renderTaskCards(tasks) {
       <div style="display:flex; justify-content:flex-end; gap:4px;">
         <button class="icon-btn" title="Sửa" onclick="event.stopPropagation(); openEditTask('${t.id}', '${safeName}', '${escapeHtml(escapeJs(t.status))}', '${escapeHtml(escapeJs(t.priority))}', '${escapeHtml(escapeJs(t.dueDate || ''))}', '${safeAssignees}', '${safeDesc}', '${t.parent_task_id || ''}', '${t.blocked_by || ''}')"><i class="fa-solid fa-pen"></i></button>${subtaskBtn}
         <button class="icon-btn" title="Bình luận & Lịch sử" onclick="event.stopPropagation(); openTaskActivity('${t.id}', '${safeName}')"><i class="fa-solid fa-comment-dots"></i></button>
+        <button class="icon-btn" title="Tệp của công việc này" onclick="event.stopPropagation(); openTaskFilesPopup('${t.id}', '${safeName}')"><i class="fa-solid fa-upload"></i></button>
         <button class="icon-btn danger" title="Xóa" onclick="event.stopPropagation(); deleteTaskAction('${t.id}', '${safeName}')"><i class="fa-solid fa-trash"></i></button>
       </div>
     `;
@@ -2684,9 +3378,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // Progress: filter/sort dropdowns lọc lại từ cache (globalAllProjects), không gọi lại API
   const progressSearchInput = document.getElementById('progress-search-input');
   const progressProjectFilter = document.getElementById('progress-project-filter');
+  const progressStatusFilter = document.getElementById('progress-status-filter');
+  const progressNameSearch = document.getElementById('progress-name-search');
   const progressSortSelect = document.getElementById('progress-sort-select');
   if (progressSearchInput) progressSearchInput.addEventListener('change', () => renderProgressTable());
   if (progressProjectFilter) progressProjectFilter.addEventListener('change', () => renderProgressTable());
+  if (progressStatusFilter) progressStatusFilter.addEventListener('change', () => renderProgressTable());
+  if (progressNameSearch) progressNameSearch.addEventListener('input', () => renderProgressTable());
   if (progressSortSelect) progressSortSelect.addEventListener('change', () => renderProgressTable());
 
   // Đóng dropdown checkbox đa lựa chọn (người thực hiện / người mời) khi bấm ra ngoài
@@ -4161,6 +4859,8 @@ async function restoreItemClick(category, id) {
         }
       } else if (category === 'events' && typeof loadCalendarData === 'function') {
         loadCalendarData({ quiet: true });
+      } else if (category === 'sci_journals' && typeof loadJournalList === 'function') {
+        loadJournalList({ quiet: true });
       }
     } else {
       showToast('Khôi phục thất bại: ' + response.message, 'error');
@@ -4194,4 +4894,369 @@ async function hardDeleteItemClick(category, id) {
   } catch (e) {
     showToast('Lỗi: ' + e.message, 'error');
   }
+}
+
+// -------------------- Journal (Bài báo khoa học) --------------------
+
+let JOURNAL_LIST_CACHE = [];
+
+async function loadJournalList(options) {
+  const quiet = !!(options && options.quiet);
+  const tbody = document.getElementById('journal-list-body');
+  if (!tbody) return;
+
+  if (!quiet) tbody.innerHTML = skeletonTableRows(5, 4);
+
+  try {
+    JOURNAL_LIST_CACHE = await API.journal.list(CURRENT_USER.groupKey);
+    renderJournalList();
+  } catch (error) {
+    console.error('Lỗi tải danh sách bài báo:', error);
+    if (!quiet) {
+      tbody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color: var(--danger-color);">Lỗi: ${escapeHtml(error.message || String(error))}</td></tr>`;
+    } else {
+      showToast('Lỗi tải danh sách bài báo: ' + (error.message || error), 'error');
+    }
+  }
+}
+
+function renderJournalList() {
+  const tbody = document.getElementById('journal-list-body');
+  if (!tbody) return;
+
+  const query = (document.getElementById('journal-search')?.value || '').trim().toLowerCase();
+  const items = query
+    ? JOURNAL_LIST_CACHE.filter(j => (j.title || '').toLowerCase().includes(query))
+    : JOURNAL_LIST_CACHE;
+
+  if (!items.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">${query ? 'Không tìm thấy bài báo phù hợp.' : 'Chưa có bài báo nào. Bấm "Bài báo mới" để bắt đầu.'}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = items.map(j => `
+    <tr>
+      <td>${escapeHtml(j.title || '')}</td>
+      <td>${escapeHtml(j.authors || '')}</td>
+      <td>${escapeHtml(fmtDateVN(j.docDate))}</td>
+      <td>${escapeHtml(fmtDateVN(j.updatedAt))}</td>
+      <td>
+        <button type="button" class="icon-btn" title="Sửa" onclick="openJournalEditor('${j.id}')"><i class="fa-solid fa-pen"></i></button>
+        <button type="button" class="icon-btn" title="Nhân bản" onclick="duplicateJournalAction('${j.id}')"><i class="fa-solid fa-copy"></i></button>
+        <button type="button" class="icon-btn" title="Xuất .tex" onclick="exportJournalTexById('${j.id}')"><i class="fa-solid fa-file-export"></i></button>
+        <button type="button" class="icon-btn" title="Xóa" onclick="deleteJournalAction('${j.id}', '${escapeHtml(escapeJsAttr(j.title || ''))}')"><i class="fa-solid fa-trash"></i></button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function fmtDateVN(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('vi-VN');
+}
+
+function escapeJsAttr(str) {
+  return String(str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+}
+
+// Auto-grow a textarea to fit its content, like a real document flowing
+// downward instead of scrolling inside a fixed box -- the whole point of the
+// docx-style workspace is that each field looks like part of a continuous page.
+function autoGrowTextarea(el) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+
+function initJournalAutoGrow() {
+  document.querySelectorAll('#journal-form .journal-field').forEach(el => {
+    if (el.tagName !== 'TEXTAREA') return;
+    if (!el.dataset.autoGrowBound) {
+      el.addEventListener('input', () => autoGrowTextarea(el));
+      el.dataset.autoGrowBound = '1';
+    }
+    autoGrowTextarea(el);
+  });
+}
+
+// Title/author/date fields are single-line by nature -- Enter should not
+// insert a newline into them even though title/authors are <textarea>s (used
+// instead of <input> purely so the same autoGrowTextarea sizing logic applies
+// uniformly across every field in the workspace).
+document.addEventListener('keydown', (e) => {
+  const t = e.target;
+  if (e.key === 'Enter' && t.classList && (t.classList.contains('journal-title-field') || t.classList.contains('journal-meta-field'))) {
+    e.preventDefault();
+  }
+});
+
+function resetJournalEditorUI() {
+  const form = document.getElementById('journal-form');
+  if (form) form.reset();
+  const idInput = document.getElementById('journal-id');
+  if (idInput) idInput.value = '';
+  document.querySelectorAll('#journal-form .journal-field').forEach(el => { el.style.height = ''; });
+}
+
+function showJournalEditorView() {
+  const listView = document.getElementById('journal-list-view');
+  const editorView = document.getElementById('journal-editor-view');
+  if (listView) listView.style.display = 'none';
+  if (editorView) editorView.style.display = 'block';
+}
+
+function closeJournalEditor() {
+  const listView = document.getElementById('journal-list-view');
+  const editorView = document.getElementById('journal-editor-view');
+  if (editorView) editorView.style.display = 'none';
+  if (listView) listView.style.display = 'block';
+  resetJournalEditorUI();
+  loadJournalList({ quiet: true });
+}
+
+async function openJournalEditor(id) {
+  resetJournalEditorUI();
+  if (!id) {
+    document.getElementById('journal-date').value = new Date().toISOString().slice(0, 10);
+    showJournalEditorView();
+    initJournalAutoGrow();
+    document.getElementById('journal-title').focus();
+    return;
+  }
+  try {
+    const j = await API.journal.get(id);
+    if (!j) { showToast('Không tìm thấy bài báo.', 'error'); return; }
+    document.getElementById('journal-id').value = j.id;
+    document.getElementById('journal-title').value = j.title || '';
+    document.getElementById('journal-authors').value = j.authors || '';
+    document.getElementById('journal-date').value = j.doc_date || '';
+    document.getElementById('journal-abstract').value = j.abstract || '';
+    document.getElementById('journal-intro').value = j.introduction || '';
+    document.getElementById('journal-methods').value = j.methods || '';
+    document.getElementById('journal-results').value = j.results || '';
+    document.getElementById('journal-discussion').value = j.discussion || '';
+    document.getElementById('journal-conclusion').value = j.conclusion || '';
+    document.getElementById('journal-references').value = j.references_text || '';
+    showJournalEditorView();
+    initJournalAutoGrow();
+  } catch (error) {
+    showToast('Lỗi tải bài báo: ' + (error.message || error), 'error');
+  }
+}
+
+function readJournalFormFields() {
+  return {
+    id: document.getElementById('journal-id').value,
+    title: document.getElementById('journal-title').value,
+    authors: document.getElementById('journal-authors').value,
+    docDate: document.getElementById('journal-date').value,
+    abstract: document.getElementById('journal-abstract').value,
+    introduction: document.getElementById('journal-intro').value,
+    methods: document.getElementById('journal-methods').value,
+    results: document.getElementById('journal-results').value,
+    discussion: document.getElementById('journal-discussion').value,
+    conclusion: document.getElementById('journal-conclusion').value,
+    referencesText: document.getElementById('journal-references').value
+  };
+}
+
+async function handleJournalFormSubmit(e) {
+  if (e) e.preventDefault();
+
+  // The submit button lives in the toolbar above the page, associated to the
+  // form via form="journal-form" rather than being a DOM descendant of it, so
+  // it can't be found with form.querySelector -- select it directly instead.
+  const submitBtn = document.querySelector('button[type="submit"][form="journal-form"]');
+  const journalData = readJournalFormFields();
+
+  if (!journalData.title.trim()) {
+    showToast('Vui lòng nhập tiêu đề bài báo.', 'error');
+    return;
+  }
+
+  const originalText = submitBtn.innerHTML;
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu...';
+
+  try {
+    const action = journalData.id ? 'updateJournal' : 'createJournal';
+    const response = await callGAS(action, { ...journalData, groupKey: CURRENT_USER.groupKey, email: CURRENT_USER.email });
+
+    if (response.status === 'success') {
+      showToast(response.message || 'Đã lưu bài báo.', 'success');
+      closeJournalEditor();
+    } else {
+      showToast('Lỗi: ' + response.message, 'error');
+    }
+  } catch (err) {
+    console.error('Lỗi lưu bài báo:', err);
+    showToast('Lỗi hệ thống: ' + (err.message || err), 'error');
+  } finally {
+    submitBtn.innerHTML = originalText;
+    submitBtn.disabled = false;
+  }
+}
+
+async function duplicateJournalAction(id) {
+  try {
+    const response = await callGAS('duplicateJournal', { id, groupKey: CURRENT_USER.groupKey, email: CURRENT_USER.email });
+    if (response.status === 'success') {
+      showToast(response.message || 'Đã nhân bản bài báo.', 'success');
+      loadJournalList({ quiet: true });
+    } else {
+      showToast('Lỗi: ' + response.message, 'error');
+    }
+  } catch (error) {
+    showToast('Lỗi: ' + (error.message || error), 'error');
+  }
+}
+
+function deleteJournalAction(id, title) {
+  Swal.fire({
+    title: 'Xóa Bài Báo?',
+    text: `Bạn có chắc chắn muốn xóa bài báo: "${title}"?`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: 'var(--danger-color)',
+    cancelButtonColor: 'var(--text-muted)',
+    confirmButtonText: 'Xóa',
+    cancelButtonText: 'Hủy'
+  }).then(async (result) => {
+    if (!result.isConfirmed) return;
+    try {
+      const response = await callGAS('deleteJournal', { id, groupKey: CURRENT_USER.groupKey });
+      if (response.status === 'success') {
+        showToast(response.message || 'Đã xóa bài báo.', 'success');
+        loadJournalList({ quiet: true });
+      } else {
+        showToast('Lỗi: ' + response.message, 'error');
+      }
+    } catch (error) {
+      showToast('Lỗi: ' + (error.message || error), 'error');
+    }
+  });
+}
+
+async function exportJournalTexById(id) {
+  try {
+    const j = await API.journal.get(id);
+    if (!j) { showToast('Không tìm thấy bài báo.', 'error'); return; }
+    downloadJournalTex({
+      title: j.title, authors: j.authors, docDate: j.doc_date, abstract: j.abstract,
+      introduction: j.introduction, methods: j.methods, results: j.results,
+      discussion: j.discussion, conclusion: j.conclusion, referencesText: j.references_text
+    });
+  } catch (error) {
+    showToast('Lỗi xuất .tex: ' + (error.message || error), 'error');
+  }
+}
+
+function exportCurrentJournalTex() {
+  const journalData = readJournalFormFields();
+  if (!journalData.title.trim()) {
+    showToast('Vui lòng nhập tiêu đề trước khi xuất.', 'error');
+    return;
+  }
+  downloadJournalTex(journalData);
+}
+
+// -------------------- Xuất Journal ra LaTeX (.tex) --------------------
+
+function downloadTextFile(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function slugify(str) {
+  return String(str || 'untitled')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip diacritics
+    .replace(/đ/gi, 'd')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60) || 'untitled';
+}
+
+// LaTeX text-mode special characters. A single regex pass with a lookup table
+// (not chained .replace() calls) so the backslash inserted for one character
+// is never re-scanned and re-escaped by a later replacement in the chain.
+function escapeLatex(str) {
+  if (str === null || str === undefined) return '';
+  const map = {
+    '\\': '\\textbackslash{}',
+    '{': '\\{',
+    '}': '\\}',
+    '$': '\\$',
+    '&': '\\&',
+    '#': '\\#',
+    '^': '\\textasciicircum{}',
+    '_': '\\_',
+    '~': '\\textasciitilde{}',
+    '%': '\\%'
+  };
+  return String(str).replace(/\r\n/g, '\n').replace(/[\\{}$&#^_~%]/g, ch => map[ch]);
+}
+
+function generateLatexDocument(j) {
+  const authorList = (j.authors || '').split(',').map(a => a.trim()).filter(Boolean)
+    .map(escapeLatex).join(' \\and ');
+
+  const sections = [
+    ['Giới thiệu', j.introduction],
+    ['Phương pháp', j.methods],
+    ['Kết quả', j.results],
+    ['Thảo luận', j.discussion],
+    ['Kết luận', j.conclusion]
+  ];
+
+  let body = '';
+  for (const [heading, content] of sections) {
+    if (content && content.trim()) {
+      body += `\\section{${escapeLatex(heading)}}\n${escapeLatex(content.trim())}\n\n`;
+    }
+  }
+
+  let bibliography = '';
+  const refLines = (j.referencesText || '').split('\n').map(l => l.trim()).filter(Boolean);
+  if (refLines.length) {
+    bibliography = '\\begin{thebibliography}{99}\n' +
+      refLines.map((line, i) => `\\bibitem{ref${i + 1}} ${escapeLatex(line)}`).join('\n') +
+      '\n\\end{thebibliography}\n\n';
+  }
+
+  return `\\documentclass[12pt,a4paper]{article}
+\\usepackage[utf8]{vietnam}
+\\usepackage[a4paper,margin=2.5cm]{geometry}
+\\usepackage{amsmath,amssymb}
+\\usepackage{graphicx}
+\\usepackage{hyperref}
+
+\\title{${escapeLatex(j.title || 'Untitled')}}
+\\author{${authorList}}
+\\date{${escapeLatex(j.docDate || '')}}
+
+\\begin{document}
+\\maketitle
+
+\\begin{abstract}
+${escapeLatex((j.abstract || '').trim())}
+\\end{abstract}
+
+${body}${bibliography}\\end{document}
+`;
+}
+
+function downloadJournalTex(journalData) {
+  const tex = generateLatexDocument(journalData);
+  downloadTextFile(`journal-${slugify(journalData.title)}-${stamp()}.tex`, tex, 'application/x-tex;charset=utf-8;');
+  showToast('Đã xuất file .tex!', 'success');
 }
