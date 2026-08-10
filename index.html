@@ -292,39 +292,101 @@
 
     <!-- ================= JOURNAL SECTION ("Journal Khoa Học") ================= -->
     <section class="app-section" id="journal-section">
-      <div class="section-hero-card card">
-        <div class="section-hero-info">
-          <h3><i class="fa-solid fa-scroll" style="color: var(--cyan-accent);"></i> Journal Khoa Học</h3>
-          <p>Viết bài báo khoa học và tự động chuyển sang định dạng LaTeX (.tex) chuẩn.</p>
+
+      <!-- ---- List view: quản lý các bài báo đã viết ---- -->
+      <div id="journal-list-view">
+        <div class="section-hero-card card">
+          <div class="section-hero-info">
+            <h3><i class="fa-solid fa-scroll" style="color: var(--cyan-accent);"></i> Journal Khoa Học</h3>
+            <p>Viết bài báo khoa học và tự động chuyển sang định dạng LaTeX (.tex) chuẩn.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="filter-bar">
+            <div class="form-group">
+              <label class="form-label" for="journal-search">Tìm theo tiêu đề</label>
+              <input type="text" id="journal-search" class="form-control" placeholder="Nhập tiêu đề bài báo..." oninput="renderJournalList()">
+            </div>
+            <div class="form-group" style="flex: 0 0 auto;">
+              <label class="form-label">&nbsp;</label>
+              <button type="button" class="btn btn-primary" onclick="openJournalEditor()"><i class="fa-solid fa-plus"></i> Bài báo mới</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Tiêu đề</th>
+                <th>Tác giả</th>
+                <th>Ngày</th>
+                <th>Cập nhật</th>
+                <th>Hành động</th>
+              </tr>
+            </thead>
+            <tbody id="journal-list-body"><tr><td colspan="5" class="empty-state">Đang tải danh sách bài báo...</td></tr></tbody>
+          </table>
         </div>
       </div>
 
-      <div class="card">
-        <div class="filter-bar">
-          <div class="form-group">
-            <label class="form-label" for="journal-search">Tìm theo tiêu đề</label>
-            <input type="text" id="journal-search" class="form-control" placeholder="Nhập tiêu đề bài báo..." oninput="renderJournalList()">
-          </div>
-          <div class="form-group" style="flex: 0 0 auto;">
-            <label class="form-label">&nbsp;</label>
-            <button type="button" class="btn btn-primary" onclick="openJournalEditor()"><i class="fa-solid fa-plus"></i> Bài báo mới</button>
-          </div>
+      <!-- ---- Editor view: khu vực làm việc kiểu trang tài liệu (docx-style) ---- -->
+      <div id="journal-editor-view" style="display: none;">
+        <div class="journal-editor-toolbar">
+          <button type="button" class="btn btn-secondary" onclick="closeJournalEditor()"><i class="fa-solid fa-arrow-left"></i> Danh sách</button>
+          <div class="journal-editor-toolbar-spacer"></div>
+          <button type="button" class="btn btn-secondary" onclick="exportCurrentJournalTex()"><i class="fa-solid fa-file-export"></i> Xuất .tex</button>
+          <button type="submit" form="journal-form" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Lưu Bài Báo</button>
         </div>
-      </div>
 
-      <div class="table-container">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Tiêu đề</th>
-              <th>Tác giả</th>
-              <th>Ngày</th>
-              <th>Cập nhật</th>
-              <th>Hành động</th>
-            </tr>
-          </thead>
-          <tbody id="journal-list-body"><tr><td colspan="5" class="empty-state">Đang tải danh sách bài báo...</td></tr></tbody>
-        </table>
+        <form id="journal-form" onsubmit="handleJournalFormSubmit(event)">
+          <input type="hidden" id="journal-id">
+
+          <div class="journal-page">
+            <textarea id="journal-title" class="journal-field journal-title-field" rows="1" placeholder="Tiêu đề bài báo" required></textarea>
+
+            <div class="journal-meta-row">
+              <textarea id="journal-authors" class="journal-field journal-meta-field" rows="1" placeholder="Tác giả (ngăn cách bằng dấu phẩy)"></textarea>
+              <input type="date" id="journal-date" class="journal-field journal-meta-field journal-date-field">
+            </div>
+
+            <div class="journal-block">
+              <div class="journal-block-label">Tóm tắt (Abstract)</div>
+              <textarea id="journal-abstract" class="journal-field journal-body-field" rows="1" placeholder="Tóm tắt ngắn gọn nội dung bài báo..."></textarea>
+            </div>
+
+            <div class="journal-block">
+              <div class="journal-block-label">1. Giới thiệu (Introduction)</div>
+              <textarea id="journal-intro" class="journal-field journal-body-field" rows="1" placeholder="Bối cảnh, vấn đề nghiên cứu, mục tiêu..."></textarea>
+            </div>
+
+            <div class="journal-block">
+              <div class="journal-block-label">2. Phương pháp (Methods)</div>
+              <textarea id="journal-methods" class="journal-field journal-body-field" rows="1" placeholder="Thiết kế nghiên cứu, đối tượng, quy trình..."></textarea>
+            </div>
+
+            <div class="journal-block">
+              <div class="journal-block-label">3. Kết quả (Results)</div>
+              <textarea id="journal-results" class="journal-field journal-body-field" rows="1" placeholder="Kết quả thu được..."></textarea>
+            </div>
+
+            <div class="journal-block">
+              <div class="journal-block-label">4. Thảo luận (Discussion)</div>
+              <textarea id="journal-discussion" class="journal-field journal-body-field" rows="1" placeholder="Phân tích, so sánh với các nghiên cứu khác..."></textarea>
+            </div>
+
+            <div class="journal-block">
+              <div class="journal-block-label">5. Kết luận (Conclusion)</div>
+              <textarea id="journal-conclusion" class="journal-field journal-body-field" rows="1" placeholder="Kết luận và hướng nghiên cứu tiếp theo..."></textarea>
+            </div>
+
+            <div class="journal-block">
+              <div class="journal-block-label">Tài liệu tham khảo (mỗi dòng 1 tài liệu)</div>
+              <textarea id="journal-references" class="journal-field journal-body-field journal-references-field" rows="1" placeholder="Nguyen, V. A. et al. (2025). Tên bài báo. Tên tạp chí, 12(3), 45-60."></textarea>
+            </div>
+          </div>
+        </form>
       </div>
     </section>
 
@@ -943,77 +1005,6 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="closeAppModal('add-task-modal')">Hủy</button>
         <button type="submit" form="task-form" class="btn btn-primary">Lưu Công Việc</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Journal Modal (Viết / Sửa bài báo khoa học) -->
-  <div class="modal-overlay" id="journal-modal">
-    <div class="modal-card" style="max-width: 720px;">
-      <div class="modal-header">
-        <h3><i class="fa-solid fa-scroll" style="color: var(--cyan-accent);"></i> Viết / Sửa Bài Báo</h3>
-        <button class="header-btn" onclick="closeAppModal('journal-modal')"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-      <div class="modal-body">
-        <form id="journal-form" onsubmit="handleJournalFormSubmit(event)">
-          <input type="hidden" id="journal-id">
-
-          <div class="form-group">
-            <label class="form-label">Tiêu đề</label>
-            <input type="text" id="journal-title" class="form-control" placeholder="Ví dụ: Cơ chế α-glucosidase trong kiểm soát đường huyết sau ăn" required>
-          </div>
-
-          <div class="form-row-2">
-            <div class="form-group">
-              <label class="form-label">Tác giả (ngăn cách bằng dấu phẩy)</label>
-              <input type="text" id="journal-authors" class="form-control" placeholder="Nguyễn Văn A, Trần Thị B">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Ngày</label>
-              <input type="date" id="journal-date" class="form-control">
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Tóm tắt (Abstract)</label>
-            <textarea id="journal-abstract" class="form-control" rows="3"></textarea>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Giới thiệu (Introduction)</label>
-            <textarea id="journal-intro" class="form-control" rows="4"></textarea>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Phương pháp (Methods)</label>
-            <textarea id="journal-methods" class="form-control" rows="4"></textarea>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Kết quả (Results)</label>
-            <textarea id="journal-results" class="form-control" rows="4"></textarea>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Thảo luận (Discussion)</label>
-            <textarea id="journal-discussion" class="form-control" rows="4"></textarea>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Kết luận (Conclusion)</label>
-            <textarea id="journal-conclusion" class="form-control" rows="4"></textarea>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Tài liệu tham khảo (mỗi dòng 1 tài liệu)</label>
-            <textarea id="journal-references" class="form-control" rows="4" placeholder="Nguyen, V. A. et al. (2025). Tên bài báo. Tên tạp chí, 12(3), 45-60."></textarea>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="closeAppModal('journal-modal')">Hủy</button>
-        <button type="button" class="btn btn-secondary" onclick="exportCurrentJournalTex()"><i class="fa-solid fa-file-export"></i> Xuất .tex</button>
-        <button type="submit" form="journal-form" class="btn btn-primary">Lưu Bài Báo</button>
       </div>
     </div>
   </div>

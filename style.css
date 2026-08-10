@@ -1922,3 +1922,77 @@ body.app-locked .user-profile-wrapper {
 /* --- Tuổi mục trong thùng rác --- */
 .trash-age { font-size: 10.5px; color: var(--text-muted); display: block; margin-top: 2px; }
 .trash-age.is-old { color: var(--danger-color); font-weight: 700; }
+
+/* -------------------- Journal Khoa Học: khu vực làm việc kiểu trang tài liệu --------------------
+   Deliberately paper-white regardless of the app's dark theme (like Word/Docs' editing
+   canvas even in "dark mode") -- the point is to feel like an actual page being written,
+   not another dark-card form. Fields are borderless textareas that auto-grow with content
+   (autoGrowTextarea in script.js) so the whole thing reads as one continuous document
+   instead of a stack of boxed inputs. */
+.journal-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.journal-editor-toolbar-spacer { flex: 1; }
+
+.journal-page {
+  background: #fdfcf7;
+  color: #262521;
+  max-width: 820px;
+  margin: 0 auto 60px;
+  padding: 70px 80px;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.4), 0 1px 0 rgba(0, 0, 0, 0.06);
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1.7;
+}
+
+.journal-field {
+  display: block;
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  resize: none;
+  overflow: hidden;
+  color: inherit;
+  font-family: inherit;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: background .15s ease;
+}
+.journal-field:focus { background: rgba(0, 0, 0, 0.04); }
+.journal-field::placeholder { color: #a29c8d; }
+
+.journal-title-field {
+  font-size: 30px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.journal-meta-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 36px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e6e1d3;
+}
+.journal-meta-field { text-align: center; font-size: 15px; color: #5c5748; width: auto; min-width: 180px; flex: 0 1 auto; }
+.journal-date-field { color: #5c5748; font-family: inherit; font-size: 14px; padding: 4px 6px; border-radius: 4px; border: none; background: transparent; }
+.journal-date-field:focus { background: rgba(0, 0, 0, 0.04); outline: none; }
+
+.journal-block { margin-bottom: 30px; }
+.journal-block-label { font-weight: 700; font-size: 16px; letter-spacing: .2px; margin-bottom: 8px; color: #262521; }
+.journal-body-field { font-size: 15.5px; min-height: 1.7em; }
+.journal-references-field { font-size: 14px; }
+
+@media (max-width: 720px) {
+  .journal-page { padding: 40px 22px; }
+  .journal-title-field { font-size: 24px; }
+}

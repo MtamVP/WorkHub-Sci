@@ -4664,18 +4664,68 @@ function escapeJsAttr(str) {
   return String(str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
 }
 
-function resetJournalModalUI() {
+// Auto-grow a textarea to fit its content, like a real document flowing
+// downward instead of scrolling inside a fixed box -- the whole point of the
+// docx-style workspace is that each field looks like part of a continuous page.
+function autoGrowTextarea(el) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+
+function initJournalAutoGrow() {
+  document.querySelectorAll('#journal-form .journal-field').forEach(el => {
+    if (el.tagName !== 'TEXTAREA') return;
+    if (!el.dataset.autoGrowBound) {
+      el.addEventListener('input', () => autoGrowTextarea(el));
+      el.dataset.autoGrowBound = '1';
+    }
+    autoGrowTextarea(el);
+  });
+}
+
+// Title/author/date fields are single-line by nature -- Enter should not
+// insert a newline into them even though title/authors are <textarea>s (used
+// instead of <input> purely so the same autoGrowTextarea sizing logic applies
+// uniformly across every field in the workspace).
+document.addEventListener('keydown', (e) => {
+  const t = e.target;
+  if (e.key === 'Enter' && t.classList && (t.classList.contains('journal-title-field') || t.classList.contains('journal-meta-field'))) {
+    e.preventDefault();
+  }
+});
+
+function resetJournalEditorUI() {
   const form = document.getElementById('journal-form');
   if (form) form.reset();
   const idInput = document.getElementById('journal-id');
   if (idInput) idInput.value = '';
+  document.querySelectorAll('#journal-form .journal-field').forEach(el => { el.style.height = ''; });
+}
+
+function showJournalEditorView() {
+  const listView = document.getElementById('journal-list-view');
+  const editorView = document.getElementById('journal-editor-view');
+  if (listView) listView.style.display = 'none';
+  if (editorView) editorView.style.display = 'block';
+}
+
+function closeJournalEditor() {
+  const listView = document.getElementById('journal-list-view');
+  const editorView = document.getElementById('journal-editor-view');
+  if (editorView) editorView.style.display = 'none';
+  if (listView) listView.style.display = 'block';
+  resetJournalEditorUI();
+  loadJournalList({ quiet: true });
 }
 
 async function openJournalEditor(id) {
-  resetJournalModalUI();
+  resetJournalEditorUI();
   if (!id) {
     document.getElementById('journal-date').value = new Date().toISOString().slice(0, 10);
-    openAppModal('journal-modal');
+    showJournalEditorView();
+    initJournalAutoGrow();
+    document.getElementById('journal-title').focus();
     return;
   }
   try {
@@ -4692,7 +4742,8 @@ async function openJournalEditor(id) {
     document.getElementById('journal-discussion').value = j.discussion || '';
     document.getElementById('journal-conclusion').value = j.conclusion || '';
     document.getElementById('journal-references').value = j.references_text || '';
-    openAppModal('journal-modal');
+    showJournalEditorView();
+    initJournalAutoGrow();
   } catch (error) {
     showToast('Lỗi tải bài báo: ' + (error.message || error), 'error');
   }
@@ -4717,8 +4768,10 @@ function readJournalFormFields() {
 async function handleJournalFormSubmit(e) {
   if (e) e.preventDefault();
 
-  const form = document.getElementById('journal-form');
-  const submitBtn = form.querySelector('button[type="submit"]');
+  // The submit button lives in the toolbar above the page, associated to the
+  // form via form="journal-form" rather than being a DOM descendant of it, so
+  // it can't be found with form.querySelector -- select it directly instead.
+  const submitBtn = document.querySelector('button[type="submit"][form="journal-form"]');
   const journalData = readJournalFormFields();
 
   if (!journalData.title.trim()) {
@@ -4736,9 +4789,7 @@ async function handleJournalFormSubmit(e) {
 
     if (response.status === 'success') {
       showToast(response.message || 'Đã lưu bài báo.', 'success');
-      closeAppModal('journal-modal');
-      resetJournalModalUI();
-      loadJournalList({ quiet: true });
+      closeJournalEditor();
     } else {
       showToast('Lỗi: ' + response.message, 'error');
     }
