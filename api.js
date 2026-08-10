@@ -234,7 +234,11 @@ const API = {
             else if (archiveScope === 'archived') query = query.not('archived_at', 'is', null);
 
             if (groupKey === 'all') {
-                query = query.or('group_key.eq.all,is_shared.eq.true');
+                // 'all' ở đây là quyền của TÀI KHOẢN (admin xem trực tiếp trong Sci), không
+                // phải app đang chạy -- chỉ ORG mới được phép gộp is_shared từ app khác vào.
+                // Trong Sci, admin chỉ nên thấy dự án CỦA Sci (cả group_key cũ 'science' lẫn
+                // 'workhub-sci' mới), không kéo theo dự án share từ Fin hay dự án riêng của ORG.
+                query = query.in('group_key', ['science', 'workhub-sci']);
             } else {
                 query = query.eq('group_key', groupKey);
             }
@@ -292,6 +296,10 @@ const API = {
         create: async (projectData, groupKey) => {
             const id = genId("PJ");
             const ownerId = await getUserId(projectData.owner);
+            // Cùng lý do như list() ở trên: 'all' là quyền tài khoản, không phải phạm vi
+            // ứng dụng -- stamp thẳng vào group_key sẽ làm dự án tạo trong Sci lộ sang
+            // Fin/ORG. Admin tạo dự án trực tiếp trong Sci thì dự án đó vẫn phải là của Sci.
+            const effectiveGroupKey = groupKey === 'all' ? 'workhub-sci' : groupKey;
 
             const { error } = await sbClient.from('projects').insert({
                 id: id,
@@ -299,7 +307,7 @@ const API = {
                 owner_id: ownerId,
                 status: projectData.status || "Planning",
                 description: projectData.description || '',
-                group_key: groupKey
+                group_key: effectiveGroupKey
             });
             if (error) throw error;
             return `Đã tạo dự án ${projectData.name}!`;
