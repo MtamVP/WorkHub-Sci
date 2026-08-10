@@ -52,7 +52,7 @@ const STAGES_META = {
 const STAGE_KEYS = ['s1', 's2', 's3', 's4', 's5', 's6'];
 let currentStageIndex = 0;
 
-const ALLOWED_GROUPS = ['workhub-sci', 'admin', 'all'];
+const ALLOWED_GROUPS = ['admin', 'science'];
 
 let CURRENT_USER = {
   email: '',
@@ -130,7 +130,7 @@ async function loadScienceMembers(showToast = false) {
       members.unshift({
         email: CURRENT_USER.email,
         nickname: CURRENT_USER.nickname || CURRENT_USER.email.split('@')[0],
-        group_key: CURRENT_USER.groupKey || 'workhub-sci',
+        group_key: CURRENT_USER.groupKey || 'science',
         isOnline: true,
         last_changed: new Date().toISOString()
       });
@@ -249,7 +249,7 @@ function renderMembersList() {
     const isMe = member.email.toLowerCase() === CURRENT_USER.email.toLowerCase();
 
     return `
-      <div class="member-item-card" title="${member.email} (${member.group_key || 'workhub-sci'})">
+      <div class="member-item-card" title="${member.email} (${member.group_key || 'science'})">
         <div class="member-avatar-box">
           <div class="member-avatar-circle">${initials}</div>
           <div class="status-dot-indicator ${statusDotClass}"></div>
@@ -333,7 +333,7 @@ async function resolveUserProfile(user) {
         if (res.isConfirmed) {
           auth.signOut().then(() => openAuthModal(true));
         } else {
-          window.location.href = 'https://workhub-ai.pages.dev/';
+          window.location.href = 'https://workhub-org.pages.dev/';
         }
       });
     }
@@ -520,7 +520,7 @@ async function fetchLiveObservationLogs() {
   const email = localStorage.getItem('userEmail') || localStorage.getItem('currentUser') || '';
   if (API && API.notification) {
     try {
-      const logs = await API.notification.get('workhub-sci', 25, email);
+      const logs = await API.notification.get('science', 25, email);
       if (logs && logs.length > 0) {
         LOCAL_LOGS = logs.map(l => ({
           time: new Date(l.timestamp).toTimeString().slice(0, 8),
@@ -571,7 +571,7 @@ async function logPipelineEvent(text, type = 'info', action = 'PIPELINE_SCI_ACTI
   const traceId = "TRC_SCI_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
   if (API && API.system && API.system.logAction) {
     try {
-      await API.system.logAction(traceId, action, text, type === 'danger' ? 'error' : 'success', userEmail, 'workhub-sci', null);
+      await API.system.logAction(traceId, action, text, type === 'danger' ? 'error' : 'success', userEmail, 'science', null);
     } catch (err) {
       console.warn("Không thể ghi log lên Supabase system_logs:", err);
     }
@@ -628,7 +628,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ==========================================================================
 // PORTED MODULES: Project (Tiến Độ) / Task (table view) / Calendar
 // Ported from the WorkHub dashboard reference (script.js) for group_key
-// 'workhub-sci'. Scope: core CRUD + list/filter only — no milestones,
+// 'science'. Scope: core CRUD + list/filter only — no milestones,
 // burndown chart, CSV export, kanban/card view, drag-reorder, bulk-select
 // toolbar, dependency picker, comment/checklist/history modal, subtasks,
 // per-task file attachments, "My Tasks"/workload widgets, or dashboard
@@ -2702,7 +2702,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // team workload), Tools gallery (static, no API), Quản lý người dùng
 // (Admin — user provisioning/group management). AI is a stub, no logic.
 // Ported from the WorkHub org dashboard reference for group_key
-// 'workhub-sci'. All callGAS(...) calls (org's GAS backend, which this app
+// 'science'. All callGAS(...) calls (org's GAS backend, which this app
 // does not have) were rewritten against API.* methods already implemented
 // in api.js for the Supabase backend.
 // ==========================================================================
