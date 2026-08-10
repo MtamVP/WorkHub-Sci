@@ -204,7 +204,10 @@ async function ensureLinkedProject(topic) {
       let myGroupKey = "workhub-sci";
       if (state.userEmail && typeof API !== "undefined" && API.auth) {
         const resolved = await API.auth.getUserGroup(state.userEmail);
-        if (resolved && resolved !== "guest") myGroupKey = resolved;
+        // 'all' is an admin's own access level, not a real app scope -- stamping
+        // it on a new project would make it show up in every WorkHub app (Fin, ORG),
+        // not just Sci. Keep the workhub-sci fallback for admins instead.
+        if (resolved && resolved !== "guest" && resolved !== "all") myGroupKey = resolved;
       }
       const { error } = await sbClient.from("projects").insert({
         id: projectId,
