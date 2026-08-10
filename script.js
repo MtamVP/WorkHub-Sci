@@ -4938,6 +4938,7 @@ function renderJournalList() {
         <button type="button" class="icon-btn" title="Nhân bản" onclick="duplicateJournalAction('${j.id}')"><i class="fa-solid fa-copy"></i></button>
         <button type="button" class="icon-btn" title="Xuất .tex" onclick="exportJournalTexById('${j.id}')"><i class="fa-solid fa-file-export"></i></button>
         <button type="button" class="icon-btn" title="Mở trong Overleaf (biên dịch ra PDF)" onclick="openJournalInOverleafById('${j.id}')"><i class="fa-solid fa-file-pdf"></i></button>
+        <button type="button" class="icon-btn" title="Xuất PDF (biên dịch ngay trên trình duyệt)" onclick="exportJournalPdfById('${j.id}')"><i class="fa-solid fa-print"></i></button>
         <button type="button" class="icon-btn" title="Xóa" onclick="deleteJournalAction('${j.id}', '${escapeHtml(escapeJsAttr(j.title || ''))}')"><i class="fa-solid fa-trash"></i></button>
       </td>
     </tr>
@@ -5222,6 +5223,155 @@ async function openCurrentJournalInOverleaf() {
   await openInOverleaf(generateLatexDocument(journalData), 'main.tex');
 }
 
+// -------------------- Xuất PDF (biên dịch LaTeX ngay trên trình duyệt bằng WASM) --------------------
+// Engine: texlyre-busytex (ESM qua jsdelivr) -- toàn bộ biên dịch chạy client-side, không gửi nội
+// dung bài báo đi đâu cả (khác với "Mở trong Overleaf" ở trên). Bộ tài nguyên gói "texlive-
+// recommended" (~230MB engine + gói lệnh) được host riêng ở Supabase Storage (bucket latex_engine)
+// vì bản gốc trên GitHub Releases của họ không bật CORS nên trình duyệt không fetch thẳng được.
+// Ban đầu định dùng tier "texlive-basic" nhỏ hơn (~120MB) nhưng tier đó thiếu gói 'fontspec' cần
+// cho XeLaTeX lẫn gói 'vietnam'/babel-vietnamese.ldf cần cho pdfTeX -- xác nhận bằng test thật,
+// không phải suy đoán -- nên phải nâng lên tier "recommended" mới đủ để biên dịch tiếng Việt.
+// File .data (191MB) vượt giới hạn upload 50MB của gói Supabase Free nên phải chia làm 7 mảnh
+// khi tải lên -- ráp lại ở đây bằng cách chặn đúng 1 request fetch() mà thư viện tự gọi lúc khởi
+// tạo (chỉ hoạt động khi initialize(false) -- chạy trực tiếp trên main thread thay vì Web Worker,
+// vì Worker có ngữ cảnh fetch() riêng, không chặn được từ ngoài).
+const BUSYTEX_ASSET_BASE = 'https://gqsbsqaxzpzcloaopzvv.supabase.co/storage/v1/object/public/latex_engine/busytex';
+const BUSYTEX_DATA_CHUNK_URLS = [0, 1, 2, 3, 4, 5, 6].map(i => `${BUSYTEX_ASSET_BASE}/texlive-recommended.data.part0${i}.chunk`);
+const BUSYTEX_DATA_URL = `${BUSYTEX_ASSET_BASE}/texlive-recommended.data`;
+
+let busytexRunnerPromise = null;
+
+async function reassembleBusytexDataBlob() {
+  const buffers = await Promise.all(BUSYTEX_DATA_CHUNK_URLS.map(async (u) => {
+    const res = await fetch(u);
+    if (!res.ok) throw new Error('Không tải được gói dữ liệu LaTeX (' + u.split('/').pop() + ')');
+    return res.arrayBuffer();
+  }));
+  return new Blob(buffers);
+}
+
+// Vá window.fetch VĨNH VIỄN (chỉ chặn đúng 1 URL, mọi request khác đi qua nguyên vẹn) thay vì
+// chỉ trong lúc initialize() -- thực tế đo được thư viện fetch lại file .data ở một thời điểm
+// TRỄ HƠN initialize() resolve (có thể là trong lần compile() đầu tiên), nên nếu gỡ patch ngay
+// sau initialize() thì lần fetch thật sự lại rơi vào fetch() gốc và 404 vào 1 URL không tồn tại
+// (vì file thật bị chia làm 7 mảnh khi upload, không có file gộp texlive-recommended.data nào cả).
+let busytexDataBlobPromise = null;
+function ensureBusytexFetchPatch() {
+  if (window.__busytexFetchPatched) return;
+  window.__busytexFetchPatched = true;
+  busytexDataBlobPromise = reassembleBusytexDataBlob();
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async function (input, init) {
+    const url = typeof input === 'string' ? input : (input && input.url) || '';
+    if (url === BUSYTEX_DATA_URL) {
+      const blob = await busytexDataBlobPromise;
+      return new Response(blob, { status: 200, headers: { 'Content-Type': 'application/octet-stream' } });
+    }
+    return originalFetch(input, init);
+  };
+}
+
+async function getBusytexRunner(onProgress) {
+  if (busytexRunnerPromise) return busytexRunnerPromise;
+
+  busytexRunnerPromise = (async () => {
+    const { BusyTexRunner } = await import('https://cdn.jsdelivr.net/npm/texlyre-busytex/+esm');
+    ensureBusytexFetchPatch();
+
+    const runner = new BusyTexRunner({
+      busytexBasePath: BUSYTEX_ASSET_BASE,
+      preloadDataPackages: [`${BUSYTEX_ASSET_BASE}/texlive-recommended.js`],
+      onDownloadProgress: onProgress || (() => {})
+    });
+    await runner.initialize(false);
+    return runner;
+  })();
+
+  try {
+    return await busytexRunnerPromise;
+  } catch (err) {
+    busytexRunnerPromise = null; // cho phép thử lại nếu lần đầu thất bại (VD: mất mạng giữa chừng)
+    throw err;
+  }
+}
+
+async function compileJournalToPdf(texContent, downloadFilenameBase) {
+  let progressLoading = null;
+  try {
+    progressLoading = Swal.fire({
+      title: 'Đang chuẩn bị bộ biên dịch LaTeX...',
+      html: '<div id="pdf-compile-progress-text">Lần đầu dùng sẽ tải khoảng 230MB, các lần sau sẽ nhanh hơn nhiều (đã lưu bộ nhớ đệm trình duyệt).</div>',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      showConfirmButton: false,
+      didOpen: () => Swal.showLoading()
+    });
+
+    const { XeLatex } = await import('https://cdn.jsdelivr.net/npm/texlyre-busytex/+esm');
+    const runner = await getBusytexRunner((progress) => {
+      const el = document.getElementById('pdf-compile-progress-text');
+      if (el) el.textContent = `Đang tải bộ biên dịch LaTeX... ${progress.percent}%`;
+    });
+
+    const el = document.getElementById('pdf-compile-progress-text');
+    if (el) el.textContent = 'Đang biên dịch bài báo...';
+
+    const xelatex = new XeLatex(runner);
+    const result = await xelatex.compile({ input: texContent, mainTexPath: 'main.tex', rerun: true });
+
+    if (progressLoading) Swal.close();
+
+    if (!result.success) {
+      await Swal.fire({
+        title: 'Biên dịch thất bại',
+        html: `<pre style="text-align:left; max-height:300px; overflow:auto; font-size:11px; background:var(--hover-bg); padding:10px; border-radius:6px;">${escapeHtml((result.log || '').slice(-4000))}</pre>`,
+        icon: 'error',
+        confirmButtonText: 'Đóng'
+      });
+      return;
+    }
+
+    const blob = new Blob([result.pdf], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `journal-${slugify(downloadFilenameBase)}-${stamp()}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+
+    showToast('Đã biên dịch và tải PDF!', 'success');
+  } catch (error) {
+    if (progressLoading) Swal.close();
+    showToast('Lỗi biên dịch PDF: ' + (error.message || error), 'error');
+  }
+}
+
+async function exportJournalPdfById(id) {
+  try {
+    const j = await API.journal.get(id);
+    if (!j) { showToast('Không tìm thấy bài báo.', 'error'); return; }
+    const journalData = {
+      title: j.title, authors: j.authors, docDate: j.doc_date, abstract: j.abstract,
+      introduction: j.introduction, methods: j.methods, results: j.results,
+      discussion: j.discussion, conclusion: j.conclusion, referencesText: j.references_text
+    };
+    await compileJournalToPdf(generateLatexDocument(journalData), journalData.title);
+  } catch (error) {
+    showToast('Lỗi biên dịch PDF: ' + (error.message || error), 'error');
+  }
+}
+
+async function exportCurrentJournalPdf() {
+  const journalData = readJournalFormFields();
+  if (!journalData.title.trim()) {
+    showToast('Vui lòng nhập tiêu đề trước khi xuất PDF.', 'error');
+    return;
+  }
+  await compileJournalToPdf(generateLatexDocument(journalData), journalData.title);
+}
+
 // -------------------- Xuất Journal ra LaTeX (.tex) --------------------
 
 function downloadTextFile(filename, content, mimeType) {
@@ -5293,8 +5443,15 @@ function generateLatexDocument(j) {
       '\n\\end{thebibliography}\n\n';
   }
 
+  // XeLaTeX + fontspec (thay vì pdfTeX + babel/vietnam) -- xác nhận bằng test thật: babel's
+  // 'vietnamese' locale thiếu file .ldf để kích hoạt, còn gói 'vietnam' cổ điển thì không có
+  // trong bản TeX Live rút gọn dùng để biên dịch ngay trên trình duyệt (xem compileJournalToPdf).
+  // XeLaTeX xử lý Unicode trực tiếp, không cần gói riêng cho tiếng Việt -- chỉ cần 1 font có đủ
+  // glyph (Latin Modern Roman đã test có đủ dấu tiếng Việt). Overleaf cũng biên dịch được y hệt,
+  // chỉ cần người dùng chọn compiler XeLaTeX ở đó (mặc định TeX Live đầy đủ đã có font/gói này).
   return `\\documentclass[12pt,a4paper]{article}
-\\usepackage[utf8]{vietnam}
+\\usepackage{fontspec}
+\\setmainfont{Latin Modern Roman}
 \\usepackage[a4paper,margin=2.5cm]{geometry}
 \\usepackage{amsmath,amssymb}
 \\usepackage{graphicx}
