@@ -578,6 +578,20 @@
             </select>
           </div>
           <div class="form-group">
+            <label class="form-label">Trạng thái</label>
+            <select id="progress-status-filter" class="form-select">
+              <option value="">-- Tất cả trạng thái --</option>
+              <option value="Planning">Planning</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Completed">Completed</option>
+              <option value="On Hold">On Hold</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tìm kiếm</label>
+            <input type="text" id="progress-name-search" class="form-control" placeholder="Tên hoặc mô tả dự án...">
+          </div>
+          <div class="form-group">
             <label class="form-label">Sắp xếp</label>
             <select id="progress-sort-select" class="form-select">
               <option value="date_desc">Mới nhất</option>
@@ -1241,6 +1255,6 @@
   </div>
 
   <script src="api.js?v=8"></script>
-  <script src="script.js?v=15"></script>
+  <script src="script.js?v=16"></script>
 </body>
 </html>

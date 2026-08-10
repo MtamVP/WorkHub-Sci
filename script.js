@@ -1356,16 +1356,24 @@ function renderProgressTable() {
   const colSpanCount = 7;
   const filterOwnerDropdown = document.getElementById('progress-search-input');
   const filterProjectDropdown = document.getElementById('progress-project-filter');
+  const filterStatusDropdown = document.getElementById('progress-status-filter');
+  const nameSearchInput = document.getElementById('progress-name-search');
   const sortSelect = document.getElementById('progress-sort-select');
 
   const filterOwner = filterOwnerDropdown ? filterOwnerDropdown.value : '';
   const filterProject = filterProjectDropdown ? filterProjectDropdown.value : '';
+  const filterStatus = filterStatusDropdown ? filterStatusDropdown.value : '';
+  const nameSearch = nameSearchInput ? nameSearchInput.value.trim().toLowerCase() : '';
   const sortVal = sortSelect ? sortSelect.value : 'date_desc';
 
   let projects = (globalAllProjects || []).filter(p => {
     const matchOwner = !filterOwner || p.owner === filterOwner;
     const matchProject = !filterProject || p.name === filterProject;
-    return matchOwner && matchProject;
+    const matchStatus = !filterStatus || p.status === filterStatus;
+    const matchSearch = !nameSearch
+      || (p.name || '').toLowerCase().includes(nameSearch)
+      || (p.description || '').toLowerCase().includes(nameSearch);
+    return matchOwner && matchProject && matchStatus && matchSearch;
   });
 
   if (sortVal === 'percent_desc') {
@@ -3085,9 +3093,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // Progress: filter/sort dropdowns lọc lại từ cache (globalAllProjects), không gọi lại API
   const progressSearchInput = document.getElementById('progress-search-input');
   const progressProjectFilter = document.getElementById('progress-project-filter');
+  const progressStatusFilter = document.getElementById('progress-status-filter');
+  const progressNameSearch = document.getElementById('progress-name-search');
   const progressSortSelect = document.getElementById('progress-sort-select');
   if (progressSearchInput) progressSearchInput.addEventListener('change', () => renderProgressTable());
   if (progressProjectFilter) progressProjectFilter.addEventListener('change', () => renderProgressTable());
+  if (progressStatusFilter) progressStatusFilter.addEventListener('change', () => renderProgressTable());
+  if (progressNameSearch) progressNameSearch.addEventListener('input', () => renderProgressTable());
   if (progressSortSelect) progressSortSelect.addEventListener('change', () => renderProgressTable());
 
   // Đóng dropdown checkbox đa lựa chọn (người thực hiện / người mời) khi bấm ra ngoài
