@@ -353,13 +353,6 @@ async function resolveUserProfile(user) {
     return false;
   }
 
-  // 'admin' là giá trị group_key mới cho tài khoản quản trị (thay cho 'all' cũ, xem CHECK
-  // constraint public.users_group_key_check). ALLOWED_GROUPS ở trên vẫn phải nhận diện đúng
-  // giá trị thô 'admin' để không khóa nhầm tài khoản admin ra khỏi app -- nhưng MỌI logic
-  // phân quyền dữ liệu phía sau (project.list/file.list/... đều check === 'all') thì cần
-  // 'all', nên chuẩn hóa lại ở đây, sau khi cổng ALLOWED_GROUPS đã thông qua.
-  if (CURRENT_USER.groupKey === 'admin') CURRENT_USER.groupKey = 'all';
-
   unlockApp();
   updateUserProfileUI();
 
