@@ -461,6 +461,19 @@
         </div>
       </div>
 
+      <div class="card" id="task-project-files-card" style="padding: 16px 20px; margin-top: 16px; display: none;">
+        <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" onclick="toggleProjectFilesPanel()">
+          <h4 style="margin:0; font-size:14px; display:flex; align-items:center; gap:8px;">
+            <i class="fa-solid fa-paperclip"></i> Tệp đính kèm của dự án
+            <span id="task-project-files-count" class="status-pill pill-info" style="font-size:10px;">0</span>
+          </h4>
+          <button type="button" class="icon-btn" id="task-project-files-toggle-btn" title="Thu gọn/Mở rộng" onclick="event.stopPropagation(); toggleProjectFilesPanel();">
+            <i class="fa-solid fa-chevron-up"></i>
+          </button>
+        </div>
+        <div class="task-attachment-list" id="task-project-files-list" style="margin-top: 12px;"></div>
+      </div>
+
       <div id="bulk-action-bar" class="bulk-action-bar" style="display: none;">
         <span id="bulk-selected-count" style="font-weight: 700;">0 đã chọn</span>
 
@@ -1255,6 +1268,6 @@
   </div>
 
   <script src="api.js?v=8"></script>
-  <script src="script.js?v=16"></script>
+  <script src="script.js?v=17"></script>
 </body>
 </html>

@@ -1785,6 +1785,8 @@ async function loadTasksForProject(projectId, options) {
 
   if (!projectId) {
     if (tableBody) tableBody.innerHTML = '<tr><td colspan="7" class="empty-state">Vui lòng chọn dự án để xem công việc.</td></tr>';
+    const filesCard = document.getElementById('task-project-files-card');
+    if (filesCard) filesCard.style.display = 'none';
     return;
   }
 
@@ -1812,6 +1814,7 @@ async function loadTasksForProject(projectId, options) {
 
       populateLabelFilter();
       applyTaskFilters();
+      renderProjectFilesPanel();
 
     } else {
       if (!quiet && tableBody) tableBody.innerHTML = `<tr><td colspan="7" class="empty-state">Lỗi: ${escapeHtml(response.message)}</td></tr>`;
@@ -1822,6 +1825,60 @@ async function loadTasksForProject(projectId, options) {
     if (!quiet && tableBody) tableBody.innerHTML = '<tr><td colspan="7" class="empty-state">Lỗi kết nối server!</td></tr>';
     showToast('Lỗi kết nối: ' + err.message, 'error');
   }
+}
+
+// -------------------- Tệp đính kèm của dự án (gộp từ attachments của mọi task) --------------------
+// Không có bảng file riêng theo project_id — file được đính kèm theo từng task
+// (tasks.attachments, xem uploadFileToTask/renderTaskAttachments), nên khu vực này gộp
+// attachments của toàn bộ task đang thuộc dự án đã chọn để xem được một chỗ.
+
+let projectFilesPanelCollapsed = false;
+
+function toggleProjectFilesPanel() {
+  projectFilesPanelCollapsed = !projectFilesPanelCollapsed;
+  const list = document.getElementById('task-project-files-list');
+  const btn = document.getElementById('task-project-files-toggle-btn');
+  if (list) list.style.display = projectFilesPanelCollapsed ? 'none' : 'flex';
+  if (btn) btn.innerHTML = `<i class="fa-solid ${projectFilesPanelCollapsed ? 'fa-chevron-down' : 'fa-chevron-up'}"></i>`;
+}
+
+function renderProjectFilesPanel() {
+  const card = document.getElementById('task-project-files-card');
+  const list = document.getElementById('task-project-files-list');
+  const countBadge = document.getElementById('task-project-files-count');
+  if (!card || !list) return;
+
+  if (!currentTaskProjectID) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+
+  const items = [];
+  (globalAllTasks || []).forEach(t => {
+    let attachments = t.attachments;
+    if (typeof attachments === 'string') {
+      try { attachments = JSON.parse(attachments || '[]'); } catch (e) { attachments = []; }
+    }
+    if (!Array.isArray(attachments)) return;
+    attachments.forEach(f => items.push({ file: f, taskId: t.id, taskName: t.name }));
+  });
+
+  if (countBadge) countBadge.textContent = String(items.length);
+
+  if (items.length === 0) {
+    list.innerHTML = '<div style="padding:8px; color: var(--text-muted); font-size: 12.5px;">Chưa có tệp đính kèm nào trong các công việc của dự án này.</div>';
+    return;
+  }
+
+  list.innerHTML = items.map(({ file: f, taskId, taskName }) => `
+    <div class="task-attachment-item">
+      <div style="min-width:0; flex:1; overflow:hidden;">
+        <a href="${escapeHtml(f.url || '#')}" target="_blank" rel="noopener"><i class="fa-solid fa-paperclip"></i> ${escapeHtml(f.name || 'Không tên')}</a>
+        <div class="task-attachment-meta">Công việc: ${escapeHtml(taskName || '')} · ${escapeHtml(f.uploader || '')} · ${escapeHtml(f.date || '')}</div>
+      </div>
+      <button type="button" class="icon-btn" title="Mở công việc" onclick="openTaskActivity('${escapeHtml(escapeJs(taskId))}', '${escapeHtml(escapeJs(taskName || ''))}'); switchTaskActivityTab('attachments');">
+        <i class="fa-solid fa-arrow-up-right-from-square"></i>
+      </button>
+    </div>
+  `).join('');
 }
 
 function renderTasks(tasks) {
