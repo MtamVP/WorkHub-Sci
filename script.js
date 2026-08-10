@@ -1958,23 +1958,53 @@ function renderProjectFilesList() {
   }).join('');
 }
 
-let pendingQuickUploadTaskId = null;
+let currentTaskFilesPopupTaskId = null;
 
-function triggerTaskQuickUpload(taskId) {
+function openTaskFilesPopup(taskId, taskName) {
   if (!currentTaskProjectID) { showToast('Vui lòng chọn dự án trước.', 'error'); return; }
-  pendingQuickUploadTaskId = taskId;
-  const input = document.getElementById('task-quick-file-input');
-  if (input) { input.value = ''; input.click(); }
+  currentTaskFilesPopupTaskId = taskId;
+  const nameEl = document.getElementById('task-files-modal-name');
+  if (nameEl) nameEl.textContent = taskName || '';
+  openAppModal('task-files-modal');
+  renderTaskFilesModalList();
 }
 
-async function handleTaskQuickFileUpload() {
-  const input = document.getElementById('task-quick-file-input');
+function renderTaskFilesModalList() {
+  const list = document.getElementById('task-files-modal-list');
+  if (!list || !currentTaskFilesPopupTaskId) return;
+
+  const items = (projectFilesCache || []).filter(f => f.taskId === currentTaskFilesPopupTaskId);
+
+  if (items.length === 0) {
+    list.innerHTML = '<div style="padding:8px; color: var(--text-muted); font-size: 12.5px;">Chưa có file nào cho công việc này.</div>';
+    return;
+  }
+
+  list.innerHTML = items.map(f => `
+    <div class="task-attachment-item">
+      <div style="min-width:0; flex:1; overflow:hidden;">
+        <a href="${escapeHtml(f.url || '#')}" target="_blank" rel="noopener"><i class="fa-solid fa-paperclip"></i> ${escapeHtml(f.name || 'Không tên')}</a>
+        <div class="task-attachment-meta">${escapeHtml((f.uploader || '').split('@')[0])} · ${escapeHtml(f.date || '')}</div>
+      </div>
+      <button type="button" class="icon-btn danger" title="Xóa file" onclick="deleteProjectFileAction('${escapeHtml(escapeJs(f.id))}', '${escapeHtml(escapeJs(f.name || ''))}')">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+    </div>
+  `).join('');
+}
+
+async function handleTaskModalFileUpload() {
+  const input = document.getElementById('task-files-modal-input');
+  const btn = document.getElementById('task-files-modal-upload-btn');
   if (!input || !input.files || input.files.length === 0) return;
-  const taskId = pendingQuickUploadTaskId;
+  const taskId = currentTaskFilesPopupTaskId;
   if (!taskId) return;
 
   const file = input.files[0];
   if (file.size > 5 * 1024 * 1024) { showToast('Tệp quá lớn! Vui lòng chọn tệp < 5MB.', 'error'); input.value = ''; return; }
+
+  const originalText = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang tải...'; }
 
   const reader = new FileReader();
   reader.onload = async function (e) {
@@ -1993,12 +2023,13 @@ async function handleTaskQuickFileUpload() {
       });
       if (response.status !== 'success') throw new Error(response.message);
       showToast('Tải file lên thành công!', 'success');
-      loadProjectFiles(currentTaskProjectID);
+      await loadProjectFiles(currentTaskProjectID);
+      renderTaskFilesModalList();
     } catch (err) {
       showToast('Lỗi: ' + err.message, 'error');
     } finally {
-      pendingQuickUploadTaskId = null;
       input.value = '';
+      if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
     }
   };
   reader.readAsDataURL(file);
@@ -2059,7 +2090,8 @@ function deleteProjectFileAction(fileId, fileName) {
       const response = await callGAS('deleteFile', { fileId, groupKey: CURRENT_USER.groupKey });
       if (response.status !== 'success') throw new Error(response.message);
       showToast(response.message, 'success');
-      loadProjectFiles(currentTaskProjectID);
+      await loadProjectFiles(currentTaskProjectID);
+      if (document.getElementById('task-files-modal').classList.contains('open')) renderTaskFilesModalList();
     } catch (err) {
       showToast('Lỗi: ' + err.message, 'error');
     }
@@ -2137,7 +2169,7 @@ function renderTasks(tasks) {
         <button class="icon-btn" title="Bình luận & Lịch sử" onclick="openTaskActivity('${t.id}', '${safeName}')">
           <i class="fa-solid fa-comment-dots"></i>
         </button>
-        <button class="icon-btn" title="Tải file cho công việc này" onclick="triggerTaskQuickUpload('${t.id}')">
+        <button class="icon-btn" title="Tệp của công việc này" onclick="openTaskFilesPopup('${t.id}', '${safeName}')">
           <i class="fa-solid fa-upload"></i>
         </button>
         <button class="icon-btn danger" title="Xóa" onclick="deleteTaskAction('${t.id}', '${safeName}')">
@@ -2205,7 +2237,7 @@ function renderTaskCards(tasks) {
       <div style="display:flex; justify-content:flex-end; gap:4px;">
         <button class="icon-btn" title="Sửa" onclick="event.stopPropagation(); openEditTask('${t.id}', '${safeName}', '${escapeHtml(escapeJs(t.status))}', '${escapeHtml(escapeJs(t.priority))}', '${escapeHtml(escapeJs(t.dueDate || ''))}', '${safeAssignees}', '${safeDesc}', '${t.parent_task_id || ''}', '${t.blocked_by || ''}')"><i class="fa-solid fa-pen"></i></button>${subtaskBtn}
         <button class="icon-btn" title="Bình luận & Lịch sử" onclick="event.stopPropagation(); openTaskActivity('${t.id}', '${safeName}')"><i class="fa-solid fa-comment-dots"></i></button>
-        <button class="icon-btn" title="Tải file cho công việc này" onclick="event.stopPropagation(); triggerTaskQuickUpload('${t.id}')"><i class="fa-solid fa-upload"></i></button>
+        <button class="icon-btn" title="Tệp của công việc này" onclick="event.stopPropagation(); openTaskFilesPopup('${t.id}', '${safeName}')"><i class="fa-solid fa-upload"></i></button>
         <button class="icon-btn danger" title="Xóa" onclick="event.stopPropagation(); deleteTaskAction('${t.id}', '${safeName}')"><i class="fa-solid fa-trash"></i></button>
       </div>
     `;

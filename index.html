@@ -528,8 +528,6 @@
         </div>
       </div>
 
-      <input type="file" id="task-quick-file-input" style="display:none;" onchange="handleTaskQuickFileUpload()">
-
       <div id="bulk-action-bar" class="bulk-action-bar" style="display: none;">
         <span id="bulk-selected-count" style="font-weight: 700;">0 đã chọn</span>
 
@@ -1153,6 +1151,25 @@
   </div>
 
   <!-- Milestones Modal -->
+  <div class="modal-overlay" id="task-files-modal">
+    <div class="modal-card" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-paperclip" style="color: var(--cyan-accent);"></i> Tệp của: <span id="task-files-modal-name"></span></h3>
+        <button class="header-btn" onclick="closeAppModal('task-files-modal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <input type="file" id="task-files-modal-input" style="display:none;" onchange="handleTaskModalFileUpload()">
+        <button type="button" class="btn btn-outline" id="task-files-modal-upload-btn" onclick="document.getElementById('task-files-modal-input').click()" style="margin-bottom: 12px;">
+          <i class="fa-solid fa-upload"></i> Tải file lên
+        </button>
+        <div id="task-files-modal-list" class="task-attachment-list"><div style="padding: 8px; color: var(--text-muted); font-size: 12.5px;">Đang tải...</div></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeAppModal('task-files-modal')">Đóng</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="milestones-modal">
     <div class="modal-card" style="max-width: 520px;">
       <div class="modal-header">
@@ -1324,6 +1341,6 @@
   </div>
 
   <script src="api.js?v=10"></script>
-  <script src="script.js?v=19"></script>
+  <script src="script.js?v=20"></script>
 </body>
 </html>
