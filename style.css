@@ -1945,8 +1945,14 @@ body.app-locked .user-profile-wrapper {
   padding: 70px 80px;
   border-radius: var(--radius-sm);
   box-shadow: 0 12px 44px rgba(0, 0, 0, 0.4), 0 1px 0 rgba(0, 0, 0, 0.06);
-  font-family: Georgia, 'Times New Roman', serif;
-  line-height: 1.7;
+  /* Times New Roman leads (not Georgia) -- it has complete, reliable glyph
+     coverage for Vietnamese diacritics across platforms and is the standard
+     typeface expected in Vietnamese academic/journal manuscripts; Georgia's
+     Vietnamese coverage is inconsistent and was causing mixed/broken-looking
+     glyphs. "Times" covers non-Windows systems that expose it under that
+     name instead. */
+  font-family: 'Times New Roman', Times, 'Liberation Serif', serif;
+  line-height: 1.6;
 }
 
 .journal-field {
@@ -1989,8 +1995,11 @@ body.app-locked .user-profile-wrapper {
 
 .journal-block { margin-bottom: 30px; }
 .journal-block-label { font-weight: 700; font-size: 16px; letter-spacing: .2px; margin-bottom: 8px; color: #262521; }
-.journal-body-field { font-size: 15.5px; min-height: 1.7em; }
-.journal-references-field { font-size: 14px; }
+.journal-body-field { font-size: 16px; min-height: 1.6em; text-align: justify; }
+.journal-references-field { font-size: 14px; text-align: left; }
+
+/* Abstract reads in italics, the standard convention for journal abstracts. */
+#journal-abstract { font-style: italic; }
 
 @media (max-width: 720px) {
   .journal-page { padding: 40px 22px; }
