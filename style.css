@@ -2018,25 +2018,35 @@ html, body.auth-page {
 
 body.auth-page {
   display: flex; justify-content: center; align-items: center;
-  background-color: #120F0A;
+  background-color: var(--bg-color);
   font-family: var(--font-body);
   position: relative; overflow: hidden;
-  color: #F4EFE6;
+  color: var(--text-primary);
   background-image: var(--login-bg-image);
   background-size: cover; background-position: center; background-repeat: no-repeat;
   transition: background-image 0.5s ease-in-out;
 }
 
+/* These pages pull in Bootstrap for layout only -- its text-* utilities are
+   tuned for a light background and clash/low-contrast on this app's dark
+   theme (and use !important, so they must be matched here to override).
+   Re-point them at this app's own already-tuned semantic color tokens. */
+body.auth-page .text-info { color: var(--info-color) !important; }
+body.auth-page .text-warning { color: var(--warning-color) !important; }
+body.auth-page .text-success { color: var(--success-color) !important; }
+body.auth-page .text-danger { color: var(--danger-color) !important; }
+body.auth-page .text-muted { color: var(--text-muted) !important; }
+
 /* Theme Controls */
 .auth-theme-controls { position: fixed; top: 20px; right: 20px; z-index: 1000; display: flex; gap: 10px; }
 .auth-btn-control {
-  width: 42px; height: 42px; border-radius: 50%; 
+  width: 42px; height: 42px; border-radius: 50%;
   border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.03); 
+  background: rgba(255, 255, 255, 0.03);
   color: var(--text-primary); cursor: pointer; transition: var(--transition-fast);
   display: flex; align-items: center; justify-content: center; font-size: 16px;
 }
-.auth-btn-control:hover { background: var(--gold); border-color: var(--gold); color: var(--on-gold); }
+.auth-btn-control:hover { background: var(--cyan-accent); border-color: var(--cyan-accent); color: var(--on-science); }
 
 /* Main Card */
 .auth-card {
@@ -2075,30 +2085,30 @@ body.auth-page {
   box-sizing: border-box;
 }
 .auth-input-group .form-control::placeholder { color: var(--text-muted); }
-.auth-input-group .form-control:focus { 
-  background: var(--card-bg); 
-  border-color: var(--gold); 
-  box-shadow: 0 0 0 3px rgba(229, 181, 94, 0.15); 
+.auth-input-group .form-control:focus {
+  background: var(--card-bg);
+  border-color: var(--cyan-accent);
+  box-shadow: 0 0 0 3px var(--cyan-glow);
 }
 .auth-input-group .form-control:focus + .auth-input-icon,
 .auth-input-group .form-control:focus ~ .auth-input-icon {
-  color: var(--gold);
+  color: var(--cyan-accent);
 }
 
-/* Primary Button (Gold) */
+/* Primary Button (matches .btn-primary's science-blue gradient) */
 .auth-btn-submit {
-  border-radius: var(--radius-md); height: 48px; 
+  border-radius: var(--radius-md); height: 48px;
   font-weight: 600; font-size: 15px;
-  background: var(--gold); 
-  border: none; color: var(--on-gold); width: 100%;
-  box-shadow: var(--shadow-gold);
+  background: linear-gradient(135deg, var(--science-accent-light), #1C4BB8);
+  border: none; color: #FFF; width: 100%;
+  box-shadow: var(--shadow-science);
   cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px;
   transition: var(--transition-fast);
   margin-top: 10px;
 }
-.auth-btn-submit:hover:not(:disabled) { 
-  background: var(--gold-light); transform: translateY(-1px); 
-  box-shadow: 0 6px 20px 0 rgba(229, 181, 94, 0.35); 
+.auth-btn-submit:hover:not(:disabled) {
+  filter: brightness(1.15); transform: translateY(-1px);
+  box-shadow: var(--shadow-cyan);
 }
 .auth-btn-submit:active:not(:disabled) { transform: translateY(1px); }
 .auth-btn-submit:disabled { opacity: 0.6; cursor: not-allowed; box-shadow: none; }
