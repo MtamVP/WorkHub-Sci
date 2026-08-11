@@ -541,7 +541,11 @@ const API = {
             if (!sbClient) return [];
 
             let projectQuery = sbClient.from('projects').select('id').is('deleted_at', null).is('archived_at', null);
-            if (groupKey && groupKey !== 'all' && groupKey !== 'admin') projectQuery = projectQuery.eq('group_key', groupKey);
+            // admin ở Sci chỉ nên thấy khối lượng công việc của dự án THUỘC Sci, không kéo
+            // theo dự án của Fin/ORG -- cùng quy tắc app-scoped visibility như project.list.
+            projectQuery = groupKey === 'admin'
+                ? projectQuery.in('group_key', ['science', 'workhub-sci'])
+                : projectQuery.eq('group_key', groupKey);
             const { data: projects } = await projectQuery;
             if (!projects || projects.length === 0) return [];
             const projectIds = projects.map(p => p.id);
