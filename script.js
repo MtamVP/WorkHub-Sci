@@ -2664,8 +2664,9 @@ function openEditTask(id, name, status, priority, dueDate, assigneesStr, descrip
 async function handleTaskFormSubmit(e) {
   if (e) e.preventDefault();
 
-  const form = document.getElementById('task-form');
-  const submitBtn = form.querySelector('button[type="submit"]');
+  // Nút "Lưu Công Việc" nằm ngoài <form> (liên kết qua thuộc tính form="task-form" ở
+  // .modal-footer), nên form.querySelector(...) không tìm thấy nó -- phải tìm toàn trang.
+  const submitBtn = document.querySelector('button[form="task-form"]');
 
   const checkboxes = document.querySelectorAll('input[name="task-assignees"]:checked');
   const selectedEmails = Array.from(checkboxes).map(cb => cb.value).join(',');
@@ -3148,7 +3149,7 @@ function resetEventModalUI() {
   const modalTitle = document.getElementById('event-modal-title');
   if (modalTitle && eventModalDefaultTitleHTML !== null) modalTitle.innerHTML = eventModalDefaultTitleHTML;
 
-  const submitBtn = eventForm ? eventForm.querySelector('button[type="submit"]') : null;
+  const submitBtn = eventForm ? document.querySelector('button[type="submit"][form="event-form"]') : null;
   if (submitBtn && eventModalDefaultSubmitHTML !== null) submitBtn.innerHTML = eventModalDefaultSubmitHTML;
 
   document.querySelectorAll('input[name="event-attendees"]').forEach(cb => cb.checked = false);
@@ -3190,7 +3191,7 @@ window.openEditEvent = function (id, e) {
   const modalTitle = document.getElementById('event-modal-title');
   if (modalTitle) modalTitle.innerHTML = '<i class="fa-solid fa-pen"></i> Sửa Sự Kiện';
 
-  const submitBtn = eventForm ? eventForm.querySelector('button[type="submit"]') : null;
+  const submitBtn = eventForm ? document.querySelector('button[type="submit"][form="event-form"]') : null;
   if (submitBtn) submitBtn.innerHTML = 'Cập Nhật';
 
   openAppModal('add-event-modal');
@@ -3245,7 +3246,7 @@ async function handleEventFormSubmit(e) {
   if (!eventForm) eventForm = document.getElementById('event-form');
   if (!eventForm) return;
 
-  const formBtn = eventForm.querySelector('button[type="submit"]');
+  const formBtn = document.querySelector('button[type="submit"][form="event-form"]');
   const formData = new FormData(eventForm);
   const eventData = {};
   for (const [key, value] of formData.entries()) eventData[key] = value;
@@ -3346,7 +3347,7 @@ document.addEventListener('DOMContentLoaded', () => {
   eventForm = document.getElementById('event-form');
   const eventModalTitleEl = document.getElementById('event-modal-title');
   if (eventModalTitleEl) eventModalDefaultTitleHTML = eventModalTitleEl.innerHTML;
-  const eventSubmitBtnEl = eventForm ? eventForm.querySelector('button[type="submit"]') : null;
+  const eventSubmitBtnEl = eventForm ? document.querySelector('button[type="submit"][form="event-form"]') : null;
   if (eventSubmitBtnEl) eventModalDefaultSubmitHTML = eventSubmitBtnEl.innerHTML;
 
   manageEventBtn = document.getElementById('manage-event-btn');
