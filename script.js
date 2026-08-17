@@ -4197,7 +4197,7 @@ function activateSearchResult(idx) {
   closeSearchPalette();
 
   if (item.type === 'file') {
-    if (item.url) window.open(item.url, '_blank', 'noopener');
+    if (item.url) openExternalUrl(item.url);
     return;
   }
   if (item.type === 'task') {
