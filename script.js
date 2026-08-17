@@ -1712,11 +1712,13 @@ async function handleProjectCreationOrUpdate() {
         showToast('Lỗi: ' + response.message, 'error');
       }
     } else if (selectedProjectId) {
+      const currentProject = (globalAllProjects || []).find(p => p.id === selectedProjectId);
       const response = await callGAS('updateProject', {
         projectId: selectedProjectId,
         status,
         description: note,
-        groupKey: CURRENT_USER.groupKey
+        groupKey: CURRENT_USER.groupKey,
+        expectedVersion: currentProject ? currentProject.version : undefined
       });
 
       if (response.status === 'success') {
@@ -3145,6 +3147,8 @@ async function loadEventAttendeeCheckboxes() {
 function resetEventModalUI() {
   const idInput = document.getElementById('event-id');
   if (idInput) idInput.value = '';
+  const expectedVersionInput = document.getElementById('event-expected-version');
+  if (expectedVersionInput) expectedVersionInput.value = '';
 
   const modalTitle = document.getElementById('event-modal-title');
   if (modalTitle && eventModalDefaultTitleHTML !== null) modalTitle.innerHTML = eventModalDefaultTitleHTML;
@@ -3169,6 +3173,8 @@ window.openEditEvent = function (id, e) {
   const toTimeStr = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
   document.getElementById('event-id').value = event.id;
+  const expectedVersionInput = document.getElementById('event-expected-version');
+  if (expectedVersionInput) expectedVersionInput.value = event.version != null ? event.version : '';
   document.getElementById('event-title').value = event.title || '';
   document.getElementById('start-date').value = toDateStr(start);
   document.getElementById('start-time').value = toTimeStr(start);
@@ -3269,6 +3275,9 @@ async function handleEventFormSubmit(e) {
 
   const editingId = document.getElementById('event-id').value;
   const isEditing = !!editingId;
+  const expectedVersionInput = document.getElementById('event-expected-version');
+  const expectedVersionRaw = expectedVersionInput ? expectedVersionInput.value : '';
+  const expectedVersion = expectedVersionRaw !== '' ? Number(expectedVersionRaw) : undefined;
 
   const originalBtnText = formBtn ? formBtn.innerHTML : '';
   if (formBtn) {
@@ -3282,7 +3291,8 @@ async function handleEventFormSubmit(e) {
       eventId: editingId,
       calendarType: currentCalendarType,
       groupKey: CURRENT_USER.groupKey,
-      email: CURRENT_USER.email || null
+      email: CURRENT_USER.email || null,
+      expectedVersion: isEditing ? expectedVersion : undefined
     });
 
     if (response.status === 'success') {
@@ -4274,6 +4284,7 @@ function initRealtimeSync() {
     },
     (status) => {
       setRealtimeIndicator(status === 'SUBSCRIBED');
+      if (window.WorkHubSync) window.WorkHubSync.onRealtimeStatus(status);
     }
   );
 }
