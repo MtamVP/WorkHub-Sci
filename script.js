@@ -1776,7 +1776,7 @@ function shareProjectAction(projectId, projectName) {
 // -------------------- Task (table view) module --------------------
 
 let globalAllTasks = [];
-let editingTaskBaseUpdatedAt = null;
+let editingTaskExpectedVersion = null;
 let taskAssigneeExpanded = false;
 
 async function loadTasksForProject(projectId, options) {
@@ -2332,7 +2332,7 @@ async function handleKanbanDrop(newStatus) {
       description: task.description,
       parentTaskId: task.parent_task_id || null,
       blockedBy: task.blocked_by || '',
-      baseUpdatedAt: task.updated_at,
+      expectedVersion: task.version,
       groupKey: CURRENT_USER.groupKey
     });
     if (response.status !== 'success') throw new Error(response.message);
@@ -2565,7 +2565,7 @@ function exportTasksCsv() {
 function resetTaskModalUI() {
   const form = document.getElementById('task-form');
   if (form) form.reset();
-  editingTaskBaseUpdatedAt = null;
+  editingTaskExpectedVersion = null;
   const idInput = document.getElementById('task-id');
   if (idInput) idInput.value = '';
   const parentInput = document.getElementById('new-task-parent-id');
@@ -2613,7 +2613,7 @@ function openAddSubtask(parentId, parentName) {
 
 function openEditTask(id, name, status, priority, dueDate, assigneesStr, description, parentTaskId, blockedByStr) {
   const sourceTask = (globalAllTasks || []).find(t => t.id === id);
-  editingTaskBaseUpdatedAt = sourceTask ? (sourceTask.updated_at || null) : null;
+  editingTaskExpectedVersion = sourceTask && sourceTask.version != null ? sourceTask.version : null;
 
   const labelsInput = document.getElementById('new-task-labels');
   if (labelsInput) labelsInput.value = sourceTask ? (sourceTask.labels || '') : '';
@@ -2686,7 +2686,7 @@ async function handleTaskFormSubmit(e) {
     parentTaskId: document.getElementById('new-task-parent-id').value || null,
     blockedBy: selectedBlockers,
     labels: normalizeLabels(document.getElementById('new-task-labels') ? document.getElementById('new-task-labels').value : ''),
-    baseUpdatedAt: editingTaskBaseUpdatedAt
+    expectedVersion: editingTaskExpectedVersion
   };
 
   if (!taskData.projectId) {
