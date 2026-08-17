@@ -401,16 +401,10 @@ const API = {
 
             return projects;
         },
-        recalculate: async (projectId, groupKey) => {
-            const { data: tasks } = await sbClient.from('tasks').select('status').is('deleted_at', null).eq('project_id', projectId);
-            let percent = 0;
-            if (tasks && tasks.length > 0) {
-                const doneTasks = tasks.filter(t => String(t.status).toLowerCase() === 'done').length;
-                percent = Math.round((doneTasks / tasks.length) * 100);
-            }
-            await sbClient.from('projects').update({ percent, updated_at: new Date().toISOString() }).eq('id', projectId);
-            return percent;
-        },
+        // recalculate() bị xóa: projects.percent giờ được trigger
+        // trg_tasks_recalc_project_percent trên bảng tasks tự tính lại ngay trong cùng
+        // transaction mỗi khi task được thêm/sửa/xóa -- không còn phụ thuộc việc gọi đúng
+        // hàm này ở đúng chỗ sau mỗi mutation nữa (lớp lỗi "quên gọi recalculate" đã hết).
         getMilestones: async (projectId) => {
             const { data, error } = await sbClient.from('project_milestones').select('*').eq('project_id', projectId).order('target_date', { ascending: true, nullsFirst: false });
             if (error) throw error;
@@ -614,7 +608,6 @@ const API = {
                 .is('deleted_at', null);
             const { data, error } = await sbClient.from('tasks').update({ deleted_at: new Date().toISOString() }).eq('id', taskId).select('name').maybeSingle();
             if (error) throw error;
-            if (projectId) await API.project.recalculate(projectId, groupKey);
             return `Đã đưa ${data.name} vào thùng rác!`;
         },
         deleteFile: async (taskId, fileId, groupKey) => {
@@ -687,7 +680,6 @@ const API = {
                 }
             }
             await API.task._writeAssignees(taskData.id, taskData.assignees);
-            if (taskData.projectId) await API.project.recalculate(taskData.projectId, groupKey);
             return `Đã lưu task "${taskData.name}"!`;
         },
 
@@ -729,7 +721,6 @@ const API = {
             if (!Array.isArray(taskIds) || taskIds.length === 0) return "Không có công việc nào được chọn.";
             const { error } = await sbClient.from('tasks').update({ status, updated_at: new Date().toISOString() }).in('id', taskIds);
             if (error) throw error;
-            if (projectId) await API.project.recalculate(projectId, groupKey);
             return `Đã cập nhật trạng thái cho ${taskIds.length} công việc!`;
         },
 
@@ -741,7 +732,6 @@ const API = {
             if (error) throw error;
 
             await Promise.all(taskIds.map(id => API.task._writeAssignees(id, assignees)));
-            if (projectId) await API.project.recalculate(projectId, groupKey);
             return `Đã gán người thực hiện cho ${taskIds.length} công việc!`;
         },
         bulkSetDueDate: async (taskIds, dueDate, projectId, groupKey) => {
@@ -750,7 +740,6 @@ const API = {
                 .update({ due_date: dueDate || null, updated_at: new Date().toISOString() })
                 .in('id', taskIds);
             if (error) throw error;
-            if (projectId) await API.project.recalculate(projectId, groupKey);
             return dueDate
                 ? `Đã đặt hạn chót cho ${taskIds.length} công việc!`
                 : `Đã xóa hạn chót của ${taskIds.length} công việc!`;
@@ -771,7 +760,6 @@ const API = {
                 return sbClient.from('tasks').update({ labels: merged.join(', '), updated_at: new Date().toISOString() }).eq('id', row.id);
             }));
 
-            if (projectId) await API.project.recalculate(projectId, groupKey);
             return `Đã gắn nhãn "${cleanLabel}" cho ${taskIds.length} công việc!`;
         },
         bulkDelete: async (taskIds, projectId, groupKey) => {
@@ -782,7 +770,6 @@ const API = {
                 .is('deleted_at', null);
             const { error } = await sbClient.from('tasks').update({ deleted_at: new Date().toISOString() }).in('id', taskIds);
             if (error) throw error;
-            if (projectId) await API.project.recalculate(projectId, groupKey);
             return `Đã xóa ${taskIds.length} công việc!`;
         },
         getComments: async (taskId) => {
@@ -1327,10 +1314,7 @@ const API = {
                     .eq('deleted_by_cascade', true);
                 if (data.project_id) {
                     await sbClient.from('projects').update({ deleted_at: null }).eq('id', data.project_id);
-                    await API.project.recalculate(data.project_id, null);
                 }
-            } else if (tableName === 'projects') {
-                await API.project.recalculate(id, null);
             }
 
             const itemName = data.name || data.title || "dữ liệu";
@@ -1338,7 +1322,6 @@ const API = {
         },
         hardDeleteItem: async (tableName, id) => {
             if (!sbClient) return false;
-            let hardDeleteTaskProjectId = null;
 
             if (tableName === 'files') {
                 const { data: fileData } = await sbClient.from('files').select('storage_path').eq('id', id).maybeSingle();
@@ -1364,7 +1347,6 @@ const API = {
                         }
                     }
                 }
-                if (taskData && taskData.project_id) hardDeleteTaskProjectId = taskData.project_id;
             } else if (tableName === 'projects') {
                 const { data: projTasks } = await sbClient.from('tasks').select('id, attachments').eq('project_id', id);
                 if (projTasks && projTasks.length > 0) {
@@ -1390,7 +1372,6 @@ const API = {
 
             const { error } = await sbClient.from(tableName).delete().eq('id', id);
             if (error) throw error;
-            if (hardDeleteTaskProjectId) await API.project.recalculate(hardDeleteTaskProjectId, null);
             return `Đã xóa vĩnh viễn "${itemName}"!`;
         }
     },
