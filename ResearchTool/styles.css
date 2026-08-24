@@ -1,19 +1,21 @@
 :root {
   color-scheme: light;
-  --bg: #ECEEF2;
+  /* Giá trị kéo về đúng hệ token chung của Sci (warm-neutral + verdigris teal thay cho
+     blue cũ) -- giữ nguyên tên biến vì cả file tham chiếu chúng khắp nơi. */
+  --bg: #F4F1EA;
   --surface: #FFFFFF;
-  --surface-2: #F3F4F7;
-  --text: #15181E;
-  --muted: #696B6F;
-  --border: rgba(20, 24, 33, 0.10);
-  --accent: #2F6AE0; /* science module accent — accounting app's blue */
-  --accent-text: #2358B8; /* đậm hơn --accent: dùng khi làm màu CHỮ trên surface/soft-tint sáng cho đủ contrast */
-  --accent-strong: #1E4FA0;
+  --surface-2: #F8F6F0;
+  --text: #1C1710;
+  --muted: #6B6255;
+  --border: rgba(28, 23, 16, 0.10);
+  --accent: #1B6F5C; /* science module accent — verdigris teal, khớp --science-accent của app chính */
+  --accent-text: #0D362D; /* đậm hơn --accent: dùng khi làm màu CHỮ trên surface/soft-tint sáng cho đủ contrast */
+  --accent-strong: #0D362D;
   --soft: color-mix(in srgb, var(--accent) 14%, var(--surface));
   --blue: #2F6AE0;
   --amber: #9A6B0D;
   --red: #BD3B3B;
-  --shadow: 0 1px 2px rgba(15, 23, 42, 0.07), 0 1px 1px rgba(15, 23, 42, 0.04);
+  --shadow: 0 1px 2px rgba(28, 23, 16, 0.07), 0 1px 1px rgba(28, 23, 16, 0.04);
   --radius: 12px;
   font-family: 'DM Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-weight: 300;
@@ -33,23 +35,23 @@ body {
   color: var(--text);
 }
 
-body.dark {
+[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0A0A0F;
-  --surface: #111118;
-  --surface-2: #16161F;
-  --text: #F0EDE8;
-  --muted: #8F8E8D;
-  --border: rgba(255, 255, 255, 0.08);
+  --bg: #0D0B08;
+  --surface: #19150F;
+  --surface-2: #16130D;
+  --text: #F3EFE6;
+  --muted: rgba(243, 239, 230, 0.6);
+  --border: rgba(243, 239, 230, 0.10);
   /* --accent giữ nguyên (dùng làm nền nút đặc + chữ trắng, đổi sẽ hỏng contrast nút);
      --accent-text là bản sáng hơn dành riêng cho chỗ dùng --accent làm MÀU CHỮ trên nền tối (.eyebrow, badge). */
-  --accent: #5B8FF9;
-  --accent-text: #A8C7FF;
+  --accent: #3DA88F;
+  --accent-text: #7FD9C4;
   --blue: #5B8FF9;
   --amber: #E0A64C; /* giá trị gốc (đã đủ contrast trên nền tối); bản đậm hơn ở :root chỉ dành cho light mode */
   --red: #E05C5C;
   --soft: color-mix(in srgb, var(--accent) 18%, var(--surface));
-  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 1px 3px rgba(15, 10, 3, 0.5);
 }
 
 a {
