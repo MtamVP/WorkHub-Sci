@@ -1,5 +1,5 @@
 window.WORKHUB_SYNC_CONFIG = {
-    dbFile: 'sqlite:workhub-sci-cache.db',
+    dbFile: 'sqlite:science-cache.db',
     // Actions eligible for optimistic local UI patching on offline write (small allowlist —
     // everything else in MUTATING_ACTIONS still queues+replays correctly, it just won't
     // reflect in the UI instantly while offline).
