@@ -1284,7 +1284,11 @@ const API = {
                 .order('deleted_at', { ascending: false }).limit(300);
 
             if (tableName === 'tasks' && groupKey) {
-                const { data: projects } = await sbClient.from('projects').select('id, name').eq('group_key', groupKey);
+                let pQuery = sbClient.from('projects').select('id, name');
+                if (groupKey !== 'all' && groupKey !== 'admin') {
+                    pQuery = pQuery.in('group_key', [groupKey, 'all']);
+                }
+                const { data: projects } = await pQuery;
                 if (!projects || projects.length === 0) return [];
                 const projectIds = projects.map(p => p.id);
                 query = query.in('project_id', projectIds);
@@ -1299,8 +1303,8 @@ const API = {
                 }
                 return data;
             } else {
-                if (groupKey && tableName !== 'users') {
-                    query = query.eq('group_key', groupKey);
+                if (groupKey && tableName !== 'users' && groupKey !== 'all' && groupKey !== 'admin') {
+                    query = query.in('group_key', [groupKey, 'all']);
                 }
                 const { data, error } = await query;
                 if (error) throw error;
