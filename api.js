@@ -1681,7 +1681,9 @@ const API = {
             if (!sbClient) return [];
             let query = sbClient.from('sci_journals').select('*, users!owner_id(nickname)')
                 .is('deleted_at', null).order('updated_at', { ascending: false }).limit(300);
-            if (groupKey !== 'all' && groupKey !== 'admin') query = query.eq('group_key', groupKey);
+            if (groupKey !== 'all' && groupKey !== 'admin') {
+                query = query.in('group_key', [groupKey, 'all']);
+            }
             if (searchName) query = query.ilike('title', `%${searchName}%`);
             const { data, error } = await query;
             if (error) throw error;

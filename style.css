@@ -912,6 +912,7 @@ body.app-locked .user-profile-wrapper {
   flex-direction: column;
   gap: 2px;
   z-index: 200;
+  cursor: pointer;
 }
 
 .user-dropdown-menu.open { display: flex; }
