@@ -1754,6 +1754,42 @@ const API = {
             if (error) throw error;
             return `Đã đưa "${data.title}" vào thùng rác!`;
         }
+    },
+    // Personal Hub: single flexible table (personal_items), scoped by auth.uid() via RLS —
+    // not group_key. Same table/rows are shared across wh-fin/wh-sci/wh-org (one Supabase
+    // project), so this is intentionally app-agnostic: never filter by source_app, it's
+    // display metadata only.
+    personal: {
+        list: async (type) => {
+            let query = sbClient.from('personal_items').select('*').eq('archived', false)
+                .order('pinned', { ascending: false }).order('updated_at', { ascending: false });
+            if (type) query = query.eq('type', type);
+            const { data, error } = await query;
+            if (error) throw error;
+            return data || [];
+        },
+        upsert: async (item) => {
+            const row = {
+                type: item.type,
+                title: item.title || null,
+                data: item.data || {},
+                pinned: !!item.pinned,
+                source_app: 'sci'
+            };
+            if (item.id) {
+                const { data, error } = await sbClient.from('personal_items').update(row).eq('id', item.id).select().single();
+                if (error) throw error;
+                return data;
+            }
+            const { data, error } = await sbClient.from('personal_items').insert(row).select().single();
+            if (error) throw error;
+            return data;
+        },
+        remove: async (id) => {
+            const { error } = await sbClient.from('personal_items').delete().eq('id', id);
+            if (error) throw error;
+            return "Đã xoá";
+        }
     }
 };
 
@@ -1769,7 +1805,8 @@ const MUTATING_ACTIONS = new Set([
     'uploadFile', 'deleteFile', 'shareFile',
     'restoreItem', 'hardDeleteItem',
     'provisionUser', 'updateUserGroup', 'removeUser', 'updateNickname',
-    'grantSciRole', 'revokeSciRole'
+    'grantSciRole', 'revokeSciRole',
+    'savePersonalItem', 'deletePersonalItem'
 ]);
 window.MUTATING_ACTIONS = MUTATING_ACTIONS;
 
@@ -1885,6 +1922,10 @@ async function _dispatchAction(action, params = {}) {
             case 'listSciRoles': result = await API.sciRoles.listAll(); break;
             case 'grantSciRole': result = await API.sciRoles.grantRole(params.targetEmail, params.role, params.byEmail); break;
             case 'revokeSciRole': result = await API.sciRoles.revokeRole(params.targetEmail, params.role); break;
+
+            case 'getPersonalItems': result = await API.personal.list(params.type); break;
+            case 'savePersonalItem': result = await API.personal.upsert(params); break;
+            case 'deletePersonalItem': result = await API.personal.remove(params.id); break;
 
             default:
                 console.warn(`Supabase chưa hỗ trợ action: ${action}`);
