@@ -212,17 +212,17 @@ async function ensureLinkedProject(topic) {
       // The projects table's RLS INSERT policy requires group_key to match the
       // caller's own current_user_group() (or be 'all') -- a value hardcoded
       // here would silently fail RLS for any real user whose public.users row
-      // still carries the legacy 'science' group_key rather than 'workhub-sci'
+      // still carries the legacy 'science' group_key rather than 'science'
       // (that migration hasn't been run for every account yet). Look up the
       // actual signed-in user's real group instead of assuming one.
-      let myGroupKey = "workhub-sci";
+      let myGroupKey = "science";
       if (state.userEmail && typeof API !== "undefined" && API.auth) {
         const resolved = await API.auth.getUserGroup(state.userEmail);
         // 'all'/'admin' are an admin's own access level, not a real app scope -- stamping
         // either onto a new project would make it show up in every WorkHub app (Fin, ORG),
         // not just Sci. 'admin' is the new group_key value for admin accounts (replaces the
         // old 'all', see public.users_group_key_check) so it must be excluded too.
-        // Keep the workhub-sci fallback for admins instead.
+        // Keep the science fallback for admins instead.
         if (resolved && resolved !== "guest" && resolved !== "all" && resolved !== "admin") myGroupKey = resolved;
       }
       const { error } = await sbClient.from("projects").insert({

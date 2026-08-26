@@ -1,6 +1,6 @@
 /* roles/style.css — trang Phân Quyền của WorkHub Science.
    Dùng lại .card/.data-table/.form-select/.btn của /style.css, chỉ khai báo
-   phần thật sự riêng của trang này (không có finance-shared.css tương đương bên Sci). */
+   phần thật sự riêng của trang này (không có science-shared.css tương đương bên Sci). */
 
 .roles-container { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
 

@@ -1,23 +1,25 @@
 
 :root {
 
-  --bg-color: #080A12;
-  --bg-color-2: #101424;
-  --card-bg: #0F1322;
-  --card-bg-elevated: #161C30;
-  --text-primary: #F0F4FC;
-  --text-secondary: #B4C0D8;
-  --text-muted: #7E8DA8;
-  --border-color: rgba(91, 143, 249, 0.14);
-  --border-light: rgba(255, 255, 255, 0.06);
-  --hover-bg: #192138;
+  --bg-color: #0D0B08;
+  --bg-color-2: #16130D;
+  --card-bg: #19150F;
+  --card-bg-elevated: #221C13;
+  --text-primary: #F3EFE6;
+  --text-secondary: rgba(243, 239, 230, 0.68);
+  --text-muted: rgba(243, 239, 230, 0.48);
+  --border-color: rgba(61, 168, 143, 0.16);
+  --border-light: rgba(243, 239, 230, 0.06);
+  --border-strong: rgba(243, 239, 230, 0.18);
+  --hover-bg: #1B2620;
 
-  --science-accent: #2F6AE0;
-  --science-accent-light: #5B8FF9;
-  --science-glow: rgba(47, 106, 224, 0.30);
-  --science-dim: rgba(91, 143, 249, 0.14);
-  --cyan-accent: #00D2FF;
-  --cyan-glow: rgba(0, 210, 255, 0.25);
+  --science-accent: #1E7F6B;
+  --science-accent-light: #3DA88F;
+  --science-accent-deep: #10453A;
+  --science-glow: rgba(30, 127, 107, 0.30);
+  --science-dim: rgba(61, 168, 143, 0.16);
+  --cyan-accent: #4FBFAE;
+  --cyan-glow: rgba(79, 191, 174, 0.25);
   --primary-color: var(--science-accent-light);
   --primary-hover: var(--cyan-accent);
   --on-science: #FFFFFF;
@@ -35,20 +37,33 @@
   --danger-bg: rgba(240, 93, 94, 0.14);
   --warning-color: #F5A623;
   --warning-bg: rgba(245, 166, 35, 0.14);
-  --info-color: #00D2FF;
-  --info-bg: rgba(0, 210, 255, 0.12);
+  --info-color: #4FBFAE;
+  --info-bg: rgba(79, 191, 174, 0.14);
 
-  --shadow-soft: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 6px rgba(0, 0, 0, 0.6);
-  --shadow-hover: 0 16px 40px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(91, 143, 249, 0.2);
+  --shadow-sm: 0 1px 3px rgba(20, 14, 4, 0.35);
+  --shadow-md: 0 8px 24px rgba(20, 14, 4, 0.45);
+  --shadow-lg: 0 24px 60px rgba(15, 10, 3, 0.55);
+  --shadow-soft: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 2px 6px rgba(20, 14, 4, 0.5);
+  --shadow-hover: 0 16px 40px rgba(15, 10, 3, 0.6), inset 0 1px 0 rgba(61, 168, 143, 0.18);
   --shadow-science: 0 8px 24px var(--science-glow);
   --shadow-cyan: 0 8px 24px var(--cyan-glow);
-  --shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.85);
+  --shadow-modal: 0 24px 60px rgba(15, 10, 3, 0.7);
 
   --radius-xs: 4px;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
+  --radius-xl: 20px;
   --radius-pill: 999px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
 
   --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'DM Mono', monospace;
@@ -65,27 +80,32 @@
 }
 
 [data-theme="light"] {
-  --bg-color: #EEF2F9;
-  --bg-color-2: #F5F7FD;
+  --bg-color: #F4F1EA;
+  --bg-color-2: #F8F6F0;
   --card-bg: #FFFFFF;
-  --card-bg-elevated: #F6F8FC;
-  --text-primary: #121A2C;
-  --text-secondary: #4E5D78;
-  --text-muted: #7B8BA6;
-  --border-color: rgba(47, 106, 224, 0.15);
-  --border-light: rgba(47, 106, 224, 0.08);
-  --hover-bg: #E6EDFB;
+  --card-bg-elevated: #FBF9F4;
+  --text-primary: #1C1710;
+  --text-secondary: rgba(28, 23, 16, 0.68);
+  --text-muted: rgba(28, 23, 16, 0.50);
+  --border-color: rgba(27, 111, 92, 0.16);
+  --border-light: rgba(28, 23, 16, 0.06);
+  --border-strong: rgba(28, 23, 16, 0.18);
+  --hover-bg: #E9F1EE;
 
-  --science-accent: #2558BE;
-  --science-accent-light: #2F6AE0;
-  --science-glow: rgba(37, 88, 190, 0.18);
-  --science-dim: rgba(37, 88, 190, 0.12);
-  --cyan-accent: #0088CC;
+  --science-accent: #1B6F5C;
+  --science-accent-light: #1E7F6B;
+  --science-accent-deep: #0D362D;
+  --science-glow: rgba(27, 111, 92, 0.18);
+  --science-dim: rgba(27, 111, 92, 0.12);
+  --cyan-accent: #2A9884;
 
-  --shadow-soft: 0 1px 4px rgba(18, 26, 44, 0.08);
-  --shadow-hover: 0 16px 36px rgba(18, 26, 44, 0.12);
-  --shadow-science: 0 8px 20px rgba(37, 88, 190, 0.16);
-  --shadow-modal: 0 24px 50px rgba(18, 26, 44, 0.20);
+  --shadow-sm: 0 1px 4px rgba(28, 23, 16, 0.08);
+  --shadow-md: 0 8px 20px rgba(28, 23, 16, 0.10);
+  --shadow-lg: 0 24px 50px rgba(28, 23, 16, 0.16);
+  --shadow-soft: 0 1px 4px rgba(28, 23, 16, 0.08);
+  --shadow-hover: 0 16px 36px rgba(28, 23, 16, 0.12);
+  --shadow-science: 0 8px 20px rgba(27, 111, 92, 0.16);
+  --shadow-modal: 0 24px 50px rgba(28, 23, 16, 0.20);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -101,6 +121,21 @@ body {
   flex-direction: column;
   -webkit-font-smoothing: antialiased;
   transition: background-color 0.3s ease, color 0.3s ease;
+  position: relative;
+}
+
+/* Grain rất mảnh phá vỡ nền phẳng tuyệt đối -- cố định (không cuộn theo nội dung),
+   pointer-events: none để không cản tương tác, opacity cực thấp để chỉ cảm nhận được
+   như một lớp vải chứ không phải hoạ tiết rõ ràng. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
 }
 
 a { color: inherit; text-decoration: none; }
@@ -135,7 +170,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
 .brand-logo {
   width: 38px;
   height: 38px;
-  background: linear-gradient(135deg, var(--science-accent-light), #153B8A);
+  background: linear-gradient(135deg, var(--science-accent-light), var(--science-accent-deep));
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
@@ -214,7 +249,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--science-accent-light), #0F285D);
+  background: linear-gradient(135deg, var(--science-accent-light), var(--science-accent-deep));
   color: var(--on-science);
   display: flex;
   align-items: center;
@@ -418,7 +453,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
 .step-item.active .step-circle {
   border-color: var(--cyan-accent);
   background: linear-gradient(135deg, var(--science-accent-light), var(--cyan-accent));
-  color: #080A12;
+  color: #0D0B08;
   box-shadow: var(--shadow-cyan);
 }
 
@@ -501,6 +536,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
   gap: 16px;
   padding: 20px 24px;
   border-left: 4px solid var(--cyan-accent);
+  border-radius: var(--radius-xl);
 }
 
 .section-hero-info h3 {
@@ -538,7 +574,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--science-accent-light), #1C4BB8);
+  background: linear-gradient(135deg, var(--science-accent-light), var(--science-accent-deep));
   color: #FFF;
   box-shadow: var(--shadow-science);
 }
@@ -548,6 +584,8 @@ button { font-family: inherit; cursor: pointer; border: none; }
   transform: translateY(-1px);
   box-shadow: var(--shadow-cyan);
 }
+
+.btn:active { transform: translateY(1px) scale(0.98); }
 
 .btn-secondary {
   background: var(--hover-bg);
@@ -743,7 +781,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
   padding: 14px;
   font-family: var(--font-mono);
   font-size: 12.5px;
-  color: #B4C0D8;
+  color: var(--text-secondary);
   overflow-x: auto;
   line-height: 1.5;
 }
@@ -912,6 +950,7 @@ body.app-locked .user-profile-wrapper {
   flex-direction: column;
   gap: 2px;
   z-index: 200;
+  cursor: pointer;
 }
 
 .user-dropdown-menu.open { display: flex; }
@@ -927,7 +966,7 @@ body.app-locked .user-profile-wrapper {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--cyan-accent), #0088CC);
+  background: linear-gradient(135deg, var(--cyan-accent), var(--science-accent-deep));
   color: #04121A;
   display: flex;
   align-items: center;
@@ -1091,7 +1130,7 @@ body.app-locked .user-profile-wrapper {
   justify-content: center;
   font-size: 10.5px;
   font-weight: 700;
-  color: #080A12;
+  color: #0D0B08;
 }
 .progress-bar.bg-primary { background-color: var(--cyan-accent); }
 .progress-bar.bg-success { background-color: var(--success-color); }
@@ -1262,11 +1301,11 @@ body.app-locked .user-profile-wrapper {
 .calendar-day:hover { border-color: var(--border-color); }
 .calendar-day.other-month { background: transparent; color: var(--text-muted); opacity: 0.4; pointer-events: none; }
 .calendar-day.today { background: color-mix(in srgb, var(--info-color) 10%, transparent); border: 1px solid color-mix(in srgb, var(--info-color) 40%, transparent); color: var(--info-color); font-weight: 800; }
-.calendar-day.selected { background: var(--cyan-accent); color: #080A12; }
+.calendar-day.selected { background: var(--cyan-accent); color: #0D0B08; }
 
 .event-dot { width: 5px; height: 5px; background-color: var(--danger-color); border-radius: 50%; margin-top: auto; margin-bottom: 8px; opacity: 0; transition: opacity 0.2s ease; }
 .calendar-day.has-event .event-dot { opacity: 1; }
-.calendar-day.selected .event-dot { background-color: #080A12; }
+.calendar-day.selected .event-dot { background-color: #0D0B08; }
 
 .today-events-widget h3 { font-size: 1.05rem; font-weight: 800; color: var(--text-primary); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
 
@@ -1483,6 +1522,72 @@ body.app-locked .user-profile-wrapper {
 .footer-group-info strong { color: var(--text-primary); }
 
 .loading-state i { font-size: 24px; color: var(--cyan-accent); }
+
+/* ==========================================================================
+   PERSONAL HUB (Cá Nhân) — private, per-user workspace shared across
+   Fin/Sci/Org. Visually distinct from group/team sections on purpose: dashed
+   borders + neutral tint instead of the team-accented surfaces, so it reads
+   as "just yours", not a new tier above group data.
+   ========================================================================== */
+
+.nav-group-personal .nav-item.active {
+  background: var(--card-bg-elevated);
+  color: var(--text-primary);
+  box-shadow: inset 3px 0 0 var(--text-secondary);
+}
+
+.personal-hub-hero { border-left-color: var(--text-muted); }
+
+.personal-hub-tabs {
+  display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 14px;
+}
+.personal-tab {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 14px; border-radius: 999px;
+  border: 1px dashed var(--border-strong);
+  background: transparent; color: var(--text-secondary);
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.personal-tab:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+.personal-tab.active {
+  background: var(--card-bg-elevated); color: var(--text-primary);
+  border-style: solid; border-color: var(--border-strong);
+}
+
+.personal-hub-list {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.personal-hub-list .empty-state { grid-column: 1 / -1; }
+
+.personal-item-card {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+  background: var(--card-bg); border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg); padding: 14px 16px;
+  transition: border-color 0.2s ease;
+}
+.personal-item-card:hover { border-color: var(--science-accent); border-style: solid; }
+.personal-note-card { cursor: pointer; }
+.personal-item-body { flex: 1; min-width: 0; }
+.personal-item-body strong { display: block; font-size: 14px; margin-bottom: 4px; }
+.personal-item-body p {
+  font-size: 12.5px; color: var(--text-secondary); margin: 0;
+  overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+  -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+}
+.personal-item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.personal-item-delete {
+  background: transparent; border: none; color: var(--text-muted);
+  cursor: pointer; padding: 4px 6px; border-radius: var(--radius-sm);
+  flex-shrink: 0; transition: color 0.15s ease, background-color 0.15s ease;
+}
+.personal-item-delete:hover { color: var(--danger-color); background: var(--hover-bg); }
+
+.personal-checklist-row { align-items: center; padding: 10px 16px; }
+.personal-checklist-check { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13.5px; flex: 1; }
+.personal-checklist-check input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--science-accent); cursor: pointer; }
+.personal-item-done { text-decoration: line-through; color: var(--text-muted); }
 
 /* ==========================================================================
    CHAT (Trò Chuyện) — full sidebar section, realtime team chat
@@ -1944,20 +2049,21 @@ body.app-locked .user-profile-wrapper {
 .journal-editor-toolbar-spacer { flex: 1; }
 
 .journal-page {
-  background: #fdfcf7;
-  color: #262521;
+  background: #FBF7ED;
+  color: #2A2520;
   max-width: 820px;
   margin: 0 auto 60px;
   padding: 70px 80px;
   border-radius: var(--radius-sm);
-  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.4), 0 1px 0 rgba(0, 0, 0, 0.06);
-  /* Times New Roman leads (not Georgia) -- it has complete, reliable glyph
-     coverage for Vietnamese diacritics across platforms and is the standard
-     typeface expected in Vietnamese academic/journal manuscripts; Georgia's
-     Vietnamese coverage is inconsistent and was causing mixed/broken-looking
-     glyphs. "Times" covers non-Windows systems that expose it under that
-     name instead. */
-  font-family: 'Times New Roman', Times, 'Liberation Serif', serif;
+  box-shadow: 0 12px 44px rgba(20, 14, 4, 0.35), 0 1px 0 rgba(20, 14, 4, 0.06);
+  /* Source Serif 4 leads -- self-hosted-quality Google Font with a declared
+     `vietnamese` subset, verified to render Vietnamese diacritics correctly
+     (checked in-browser before locking this in, since Georgia was tried here
+     before and silently broke on stacked tone marks -- see the fallback
+     chain below, which is the exact stack that was already proven safe). If
+     Source Serif 4 ever fails to load, it falls through to that same
+     Times New Roman / Times / Liberation Serif chain, not a blank sans-serif. */
+  font-family: 'Source Serif 4', 'Times New Roman', Times, 'Liberation Serif', serif;
   line-height: 1.6;
 }
 
@@ -1976,7 +2082,7 @@ body.app-locked .user-profile-wrapper {
   transition: background .15s ease;
 }
 .journal-field:focus { background: rgba(0, 0, 0, 0.04); }
-.journal-field::placeholder { color: #a29c8d; }
+.journal-field::placeholder { color: #A69B87; }
 
 .journal-title-field {
   font-size: 30px;
@@ -2000,7 +2106,7 @@ body.app-locked .user-profile-wrapper {
 .journal-date-field:focus { background: rgba(0, 0, 0, 0.04); outline: none; }
 
 .journal-block { margin-bottom: 30px; }
-.journal-block-label { font-weight: 700; font-size: 16px; letter-spacing: .2px; margin-bottom: 8px; color: #262521; }
+.journal-block-label { font-weight: 700; font-size: 16px; letter-spacing: .2px; margin-bottom: 8px; color: #2A2520; }
 .journal-body-field { font-size: 16px; min-height: 1.6em; text-align: justify; }
 .journal-references-field { font-size: 14px; text-align: left; }
 
@@ -2105,7 +2211,7 @@ body.auth-page .text-muted { color: var(--text-muted) !important; }
 .auth-btn-submit {
   border-radius: var(--radius-md); height: 48px;
   font-weight: 600; font-size: 15px;
-  background: linear-gradient(135deg, var(--science-accent-light), #1C4BB8);
+  background: linear-gradient(135deg, var(--science-accent-light), var(--science-accent-deep));
   border: none; color: #FFF; width: 100%;
   box-shadow: var(--shadow-science);
   cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px;
@@ -2134,3 +2240,6 @@ body.auth-page .text-muted { color: var(--text-muted) !important; }
 
 /* Extras */
 body.auth-page #toast-container { left: 50%; right: auto; top: 24px; transform: translateX(-50%); }
+/* �?m b?o SweetAlert popup lu�n hi?n th? tr�n c�ng (tr�n c? modal th�ng r�c) */
+.swal2-container { z-index: 9999 !important; }
+

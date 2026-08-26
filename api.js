@@ -247,8 +247,8 @@ const API = {
                 // 'admin' ở đây là quyền của TÀI KHOẢN (admin xem trực tiếp trong Sci), không
                 // phải app đang chạy -- chỉ ORG mới được phép gộp is_shared từ app khác vào.
                 // Trong Sci, admin chỉ nên thấy dự án CỦA Sci (cả group_key cũ 'science' lẫn
-                // 'workhub-sci' mới), không kéo theo dự án share từ Fin hay dự án riêng của ORG.
-                query = query.in('group_key', ['science', 'workhub-sci']);
+                // 'science' mới), không kéo theo dự án share từ Fin hay dự án riêng của ORG.
+                query = query.in('group_key', ['science', 'science']);
             } else {
                 query = query.eq('group_key', groupKey);
             }
@@ -309,7 +309,7 @@ const API = {
             // Cùng lý do như list() ở trên: 'admin' là quyền tài khoản, không phải phạm vi
             // ứng dụng -- stamp thẳng vào group_key sẽ làm dự án tạo trong Sci lộ sang
             // Fin/ORG. Admin tạo dự án trực tiếp trong Sci thì dự án đó vẫn phải là của Sci.
-            const effectiveGroupKey = groupKey === 'admin' ? 'workhub-sci' : groupKey;
+            const effectiveGroupKey = groupKey === 'admin' ? 'science' : groupKey;
 
             const { error } = await sbClient.from('projects').insert({
                 id: id,
@@ -556,7 +556,7 @@ const API = {
             // admin ở Sci chỉ nên thấy khối lượng công việc của dự án THUỘC Sci, không kéo
             // theo dự án của Fin/ORG -- cùng quy tắc app-scoped visibility như project.list.
             projectQuery = groupKey === 'admin'
-                ? projectQuery.in('group_key', ['science', 'workhub-sci'])
+                ? projectQuery.in('group_key', ['science', 'science'])
                 : projectQuery.eq('group_key', groupKey);
             const { data: projects } = await projectQuery;
             if (!projects || projects.length === 0) return [];
@@ -631,10 +631,10 @@ const API = {
             if (!fileToDelete) throw new Error("Không tìm thấy file trong task này.");
 
             if (fileToDelete.id.startsWith("TF_")) {
-                const urlParts = fileToDelete.url.split('/general_bucket/');
+                const urlParts = fileToDelete.url.split('/science_bucket/');
                 if (urlParts.length > 1) {
                     const filePath = decodeURIComponent(urlParts[1]);
-                    const { error: deleteError } = await sbClient.storage.from('general_bucket').remove([filePath]);
+                    const { error: deleteError } = await sbClient.storage.from('science_bucket').remove([filePath]);
                     if (deleteError) console.error("Lỗi xóa file storage:", deleteError);
                 }
             }
@@ -808,8 +808,8 @@ const API = {
             const blob = b64toBlob(fileData, mimeType);
             const fileId = genId("TF");
             const safeFileName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-            const filePath = `tasks/${taskId}/${fileId}_${safeFileName}`;
-            const bucketName = 'general_bucket';
+            const filePath = `bronze/tasks/${taskId}/${fileId}_${safeFileName}`;
+            const bucketName = 'science_bucket';
 
             const { error: uploadError } = await sbClient.storage.from(bucketName).upload(filePath, blob, { contentType: mimeType });
             if (uploadError) throw uploadError;
@@ -840,7 +840,7 @@ const API = {
             if (groupKey === 'admin') {
                 // Cùng lý do như project.list(): admin xem trực tiếp trong Sci chỉ nên thấy
                 // file CỦA Sci, không kéo theo file share từ Fin hay file riêng của ORG.
-                query = query.in('group_key', ['science', 'workhub-sci']);
+                query = query.in('group_key', ['science', 'science']);
             } else {
                 query = query.eq('group_key', groupKey);
             }
@@ -900,11 +900,10 @@ const API = {
             const fileId = "F_" + Date.now() + Math.floor(Math.random()*1000);
             const safeFileName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
             const filePath = `${fileId}_${safeFileName}`;
-            const bucketName = groupKey === 'finance' ? 'finance_bucket' :
-                (groupKey === 'science' ? 'science_bucket' : 'general_bucket');
+            const bucketName = 'science_bucket';
             // Admin tải file trực tiếp trong Sci ('admin') vẫn phải là file của Sci, không
             // stamp thẳng 'admin' (cùng lý do như project.create()).
-            const effectiveGroupKey = groupKey === 'admin' ? 'workhub-sci' : groupKey;
+            const effectiveGroupKey = 'science';
 
             const fullStoragePath = `bronze/${folderPath ? folderPath + '/' : ''}${filePath}`;
 
@@ -1009,7 +1008,7 @@ const API = {
             if (calendarType !== 'personal') {
                 let projQuery = sbClient.from('projects').select('id, name').is('deleted_at', null);
                 projQuery = groupKey === 'admin'
-                    ? projQuery.in('group_key', ['science', 'workhub-sci'])
+                    ? projQuery.in('group_key', ['science', 'science'])
                     : projQuery.eq('group_key', groupKey);
                 const { data: projectsForTasks } = await projQuery;
 
@@ -1120,7 +1119,7 @@ const API = {
         getAssetData: async (email) => {
             if (!sbClient) return { status: 'success', cash: 0, debt: 0, data: [] };
             const userId = await getUserId(email);
-            const { data, error } = await sbClient.from('finance_assets').select('*').eq('user_id', userId).maybeSingle();
+            const { data, error } = await sbClient.from('science_assets').select('*').eq('user_id', userId).maybeSingle();
             if (error || !data) return { status: 'success', cash: 0, debt: 0, data: [] };
             return { status: 'success', cash: data.cash, debt: data.debt, data: data.data };
         },
@@ -1136,7 +1135,7 @@ const API = {
             const userId = await getUserId(email);
             if (!userId) throw new Error("User không tồn tại");
 
-            const { error } = await sbClient.from('finance_assets').upsert({
+            const { error } = await sbClient.from('science_assets').upsert({
                 user_id: userId,
                 cash: cash,
                 debt: debt,
@@ -1147,7 +1146,7 @@ const API = {
             return "Đã lưu danh mục đầu tư!";
         },
         getTeamSummary: async () => {
-            const { data, error } = await sbClient.from('finance_assets').select('*, users!inner(nickname, email)');
+            const { data, error } = await sbClient.from('science_assets').select('*, users!inner(nickname, email)');
             if (error) throw error;
 
             const totalNav = data.reduce((sum, row) => sum + Number(row.nav), 0);
@@ -1166,12 +1165,12 @@ const API = {
             return result;
         },
         getMemberList: async () => {
-            const { data } = await sbClient.from('users').select('email').in('group_key', ['finance', 'admin']);
+            const { data } = await sbClient.from('users').select('email').in('group_key', ['science', 'admin']);
             return data ? data.map(d => d.email) : [];
         },
         getMemberDetail: async (email) => {
             const userId = await getUserId(email);
-            const { data, error } = await sbClient.from('finance_assets').select('*').eq('user_id', userId).maybeSingle();
+            const { data, error } = await sbClient.from('science_assets').select('*').eq('user_id', userId).maybeSingle();
             if (error || !data) return [];
 
             let table = [];
@@ -1191,13 +1190,13 @@ const API = {
         }
     },
     note: {
-        getFinanceUsers: async () => {
-            const { data } = await sbClient.from('users').select('email, nickname').in('group_key', ['finance', 'admin']);
+        getScienceUsers: async () => {
+            const { data } = await sbClient.from('users').select('email, nickname').in('group_key', ['science', 'admin']);
             return data ? data.map(d => ({ name: d.nickname || d.email, email: d.email })) : [];
         },
-        addFinanceNote: async (payload) => {
+        addScienceNote: async (payload) => {
             const authorId = await getUserId(payload.author);
-            const { error } = await sbClient.from('finance_notes').insert({
+            const { error } = await sbClient.from('science_notes').insert({
                 id: genId("FN"),
                 author_id: authorId,
                 title: payload.title || 'Note',
@@ -1207,10 +1206,10 @@ const API = {
             if (error) throw error;
             return "Thêm ghi chú thành công!";
         },
-        getFinanceNotes: async () => {
+        getScienceNotes: async () => {
             const startOfDay = new Date();
             startOfDay.setHours(0, 0, 0, 0);
-            const { data, error } = await sbClient.from('finance_notes')
+            const { data, error } = await sbClient.from('science_notes')
                 .select('*, users!inner(email, nickname)')
                 .gte('created_at', startOfDay.toISOString())
                 .order('created_at', { ascending: false });
@@ -1224,23 +1223,23 @@ const API = {
                 time: new Date(n.created_at).toLocaleString('vi-VN', {hour: '2-digit', minute:'2-digit', day:'2-digit', month:'2-digit'})
             }));
         },
-        deleteFinanceNote: async (id) => {
-            const { error } = await sbClient.from('finance_notes').delete().eq('id', id);
+        deleteScienceNote: async (id) => {
+            const { error } = await sbClient.from('science_notes').delete().eq('id', id);
             if (error) throw error;
             return "Đã xóa note thành công!";
         }
     },
     stock: {
         getStockList: async () => {
-            const { data } = await sbClient.from('finance_stocks').select('symbol');
+            const { data } = await sbClient.from('science_stocks').select('symbol');
             return data ? data.map(d => d.symbol) : [];
         },
         getStockDetail: async (symbol) => {
-            const { data } = await sbClient.from('finance_stocks').select('data').eq('symbol', symbol).maybeSingle();
+            const { data } = await sbClient.from('science_stocks').select('data').eq('symbol', symbol).maybeSingle();
             return data ? data.data : {};
         },
         saveStockValuation: async (payload) => {
-            const { error } = await sbClient.from('finance_stocks').upsert({
+            const { error } = await sbClient.from('science_stocks').upsert({
                 symbol: payload.symbol,
                 data: payload
             });
@@ -1285,7 +1284,11 @@ const API = {
                 .order('deleted_at', { ascending: false }).limit(300);
 
             if (tableName === 'tasks' && groupKey) {
-                const { data: projects } = await sbClient.from('projects').select('id, name').eq('group_key', groupKey);
+                let pQuery = sbClient.from('projects').select('id, name');
+                if (groupKey !== 'all' && groupKey !== 'admin') {
+                    pQuery = pQuery.in('group_key', [groupKey, 'all']);
+                }
+                const { data: projects } = await pQuery;
                 if (!projects || projects.length === 0) return [];
                 const projectIds = projects.map(p => p.id);
                 query = query.in('project_id', projectIds);
@@ -1300,8 +1303,8 @@ const API = {
                 }
                 return data;
             } else {
-                if (groupKey && tableName !== 'users') {
-                    query = query.eq('group_key', groupKey);
+                if (groupKey && tableName !== 'users' && groupKey !== 'all' && groupKey !== 'admin') {
+                    query = query.in('group_key', [groupKey, 'all']);
                 }
                 const { data, error } = await query;
                 if (error) throw error;
@@ -1500,7 +1503,7 @@ const API = {
 
             let projQuery = sbClient.from('projects').select('id, name, description, group_key').is('deleted_at', null);
             projQuery = groupKey === 'admin'
-                ? projQuery.in('group_key', ['science', 'workhub-sci'])
+                ? projQuery.in('group_key', ['science', 'science'])
                 : projQuery.eq('group_key', groupKey);
             const { data: allProjects } = await projQuery;
 
@@ -1535,7 +1538,7 @@ const API = {
 
             let fileQuery = sbClient.from('files').select('id, name, description, storage_path, group_key').is('deleted_at', null);
             fileQuery = groupKey === 'admin'
-                ? fileQuery.in('group_key', ['science', 'workhub-sci'])
+                ? fileQuery.in('group_key', ['science', 'science'])
                 : fileQuery.eq('group_key', groupKey);
             const { data: fileRows } = await fileQuery.or(`name.ilike.${pattern},description.ilike.${pattern}`).limit(8);
             const files = (fileRows || []).map(f => ({
@@ -1682,7 +1685,9 @@ const API = {
             if (!sbClient) return [];
             let query = sbClient.from('sci_journals').select('*, users!owner_id(nickname)')
                 .is('deleted_at', null).order('updated_at', { ascending: false }).limit(300);
-            if (groupKey !== 'all' && groupKey !== 'admin') query = query.eq('group_key', groupKey);
+            if (groupKey !== 'all' && groupKey !== 'admin') {
+                query = query.in('group_key', [groupKey, 'all']);
+            }
             if (searchName) query = query.ilike('title', `%${searchName}%`);
             const { data, error } = await query;
             if (error) throw error;
@@ -1749,6 +1754,42 @@ const API = {
             if (error) throw error;
             return `Đã đưa "${data.title}" vào thùng rác!`;
         }
+    },
+    // Personal Hub: single flexible table (personal_items), scoped by auth.uid() via RLS —
+    // not group_key. Same table/rows are shared across wh-fin/wh-sci/wh-org (one Supabase
+    // project), so this is intentionally app-agnostic: never filter by source_app, it's
+    // display metadata only.
+    personal: {
+        list: async (type) => {
+            let query = sbClient.from('personal_items').select('*').eq('archived', false)
+                .order('pinned', { ascending: false }).order('updated_at', { ascending: false });
+            if (type) query = query.eq('type', type);
+            const { data, error } = await query;
+            if (error) throw error;
+            return data || [];
+        },
+        upsert: async (item) => {
+            const row = {
+                type: item.type,
+                title: item.title || null,
+                data: item.data || {},
+                pinned: !!item.pinned,
+                source_app: 'sci'
+            };
+            if (item.id) {
+                const { data, error } = await sbClient.from('personal_items').update(row).eq('id', item.id).select().single();
+                if (error) throw error;
+                return data;
+            }
+            const { data, error } = await sbClient.from('personal_items').insert(row).select().single();
+            if (error) throw error;
+            return data;
+        },
+        remove: async (id) => {
+            const { error } = await sbClient.from('personal_items').delete().eq('id', id);
+            if (error) throw error;
+            return "Đã xoá";
+        }
     }
 };
 
@@ -1764,7 +1805,8 @@ const MUTATING_ACTIONS = new Set([
     'uploadFile', 'deleteFile', 'shareFile',
     'restoreItem', 'hardDeleteItem',
     'provisionUser', 'updateUserGroup', 'removeUser', 'updateNickname',
-    'grantSciRole', 'revokeSciRole'
+    'grantSciRole', 'revokeSciRole',
+    'savePersonalItem', 'deletePersonalItem'
 ]);
 window.MUTATING_ACTIONS = MUTATING_ACTIONS;
 
@@ -1860,10 +1902,10 @@ async function _dispatchAction(action, params = {}) {
             case 'getMemberList': result = await API.asset.getMemberList(); break;
             case 'getMemberDetail': result = await API.asset.getMemberDetail(params.email); break;
 
-            case 'getFinanceUsers': result = await API.note.getFinanceUsers(); break;
-            case 'getFinanceNotes': result = await API.note.getFinanceNotes(); break;
-            case 'addFinanceNote': result = await API.note.addFinanceNote(params); break;
-            case 'deleteFinanceNote': result = await API.note.deleteFinanceNote(params.id); break;
+            case 'getScienceUsers': result = await API.note.getScienceUsers(); break;
+            case 'getScienceNotes': result = await API.note.getScienceNotes(); break;
+            case 'addScienceNote': result = await API.note.addScienceNote(params); break;
+            case 'deleteScienceNote': result = await API.note.deleteScienceNote(params.id); break;
 
             case 'getStockList': result = await API.stock.getStockList(); break;
             case 'getStockDetail': result = await API.stock.getStockDetail(params.symbol); break;
@@ -1880,6 +1922,10 @@ async function _dispatchAction(action, params = {}) {
             case 'listSciRoles': result = await API.sciRoles.listAll(); break;
             case 'grantSciRole': result = await API.sciRoles.grantRole(params.targetEmail, params.role, params.byEmail); break;
             case 'revokeSciRole': result = await API.sciRoles.revokeRole(params.targetEmail, params.role); break;
+
+            case 'getPersonalItems': result = await API.personal.list(params.type); break;
+            case 'savePersonalItem': result = await API.personal.upsert(params); break;
+            case 'deletePersonalItem': result = await API.personal.remove(params.id); break;
 
             default:
                 console.warn(`Supabase chưa hỗ trợ action: ${action}`);

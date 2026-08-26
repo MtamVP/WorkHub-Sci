@@ -597,8 +597,9 @@ function init() {
     renderAll();
   });
   $("#themeToggle").addEventListener("click", () => {
-    document.body.classList.toggle("dark");
-    localStorage.setItem("researchHubTheme", document.body.classList.contains("dark") ? "dark" : "light");
+    var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("researchHubTheme", next);
   });
   $("#closeModal").addEventListener("click", () => $("#toolModal").close());
   $("#toolModal").addEventListener("click", (event) => {
@@ -616,7 +617,7 @@ function init() {
     var hour = new Date().getHours();
     wantsDark = sharedTheme === "dark" || ((sharedTheme === "auto" || !sharedTheme) && (hour >= 18 || hour < 6));
   }
-  if (wantsDark) document.body.classList.add("dark");
+  document.documentElement.setAttribute("data-theme", wantsDark ? "dark" : "light");
 
   renderStacks();
   rebuildFilters();

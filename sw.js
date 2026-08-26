@@ -1,4 +1,4 @@
-const CACHE_NAME = 'workhub-sci-cache-v1.0.0';
+const CACHE_NAME = 'science-cache-v1.0.0';
 
 self.addEventListener('install', event => {
     self.skipWaiting();
