@@ -4148,7 +4148,8 @@ function renderSearchResults(data) {
     ...(data.milestones || []).map(x => ({ ...x, type: 'milestone' })),
     ...(data.events || []).map(x => ({ ...x, type: 'event' })),
     ...(data.comments || []).map(x => ({ ...x, type: 'comment' })),
-    ...(data.files || []).map(x => ({ ...x, type: 'file' }))
+    ...(data.files || []).map(x => ({ ...x, type: 'file' })),
+    ...(data.personal || []).map(x => ({ ...x, type: 'personal' }))
   ];
   searchPaletteIndex = searchPaletteResults.length > 0 ? 0 : -1;
 
@@ -4163,12 +4164,13 @@ function renderSearchResults(data) {
     milestone: { label: 'Cột mốc', icon: 'fa-flag-checkered' },
     event: { label: 'Sự kiện', icon: 'fa-calendar-check' },
     comment: { label: 'Bình luận', icon: 'fa-comment-dots' },
-    file: { label: 'Tệp', icon: 'fa-file' }
+    file: { label: 'Tệp', icon: 'fa-file' },
+    personal: { label: 'Cá nhân', icon: 'fa-user-lock' }
   };
 
   let html = '';
   let flatIndex = 0;
-  ['project', 'task', 'milestone', 'event', 'comment', 'file'].forEach(type => {
+  ['project', 'task', 'milestone', 'event', 'comment', 'file', 'personal'].forEach(type => {
     const items = searchPaletteResults.filter(r => r.type === type);
     if (items.length === 0) return;
     html += `<div class="search-palette-group">${GROUP_META[type].label}</div>`;
@@ -4238,6 +4240,14 @@ function activateSearchResult(idx) {
       const d = new Date(item.startTime);
       setTimeout(() => window.selectDate(d.getFullYear(), d.getMonth(), d.getDate()), 250);
     }
+  }
+  if (item.type === 'personal') {
+    switchSection('personal');
+    setTimeout(() => {
+      personalActiveTagFilter = null;
+      switchPersonalTab(item.personalType || 'note');
+      if (item.personalType !== 'pin') setTimeout(() => openPersonalItemModal(item.id), 150);
+    }, 200);
   }
 }
 
@@ -5503,13 +5513,41 @@ function downloadJournalTex(journalData) {
 
 let personalItemsCache = [];
 let personalActiveTab = 'note';
+let personalActiveTagFilter = null;
 
 const PERSONAL_TAB_META = {
   note: { label: 'Ghi chú', icon: 'fa-note-sticky', empty: 'Chưa có ghi chú nào.' },
   pin: { label: 'Đã ghim', icon: 'fa-thumbtack', empty: 'Chưa ghim gì — bấm biểu tượng ghim trên danh sách dự án để lưu vào đây.' },
   checklist: { label: 'Việc riêng', icon: 'fa-list-check', empty: 'Chưa có việc riêng nào.' },
-  shortcut: { label: 'Lối tắt', icon: 'fa-link', empty: 'Chưa có lối tắt nào.' }
+  shortcut: { label: 'Lối tắt', icon: 'fa-link', empty: 'Chưa có lối tắt nào.' },
+  calendar_event: { label: 'Lịch riêng', icon: 'fa-calendar-days', empty: 'Chưa có sự kiện riêng nào.' }
 };
+const PERSONAL_TAB_DEFAULT_ORDER = Object.keys(PERSONAL_TAB_META);
+
+let personalLayoutPrefItem = null;
+let personalLayoutOrder = PERSONAL_TAB_DEFAULT_ORDER.slice();
+let personalLayoutHidden = [];
+
+function applyPersonalLayoutPref() {
+  const prefItem = personalItemsCache.find(i => i.type === 'pref' && i.title === 'layout');
+  personalLayoutPrefItem = prefItem || null;
+  const data = prefItem && prefItem.data ? prefItem.data : {};
+  const savedOrder = Array.isArray(data.order) ? data.order.filter(k => PERSONAL_TAB_META[k]) : [];
+  const missing = PERSONAL_TAB_DEFAULT_ORDER.filter(k => !savedOrder.includes(k));
+  personalLayoutOrder = savedOrder.concat(missing);
+  personalLayoutHidden = Array.isArray(data.hidden) ? data.hidden.filter(k => PERSONAL_TAB_META[k]) : [];
+  if (personalLayoutHidden.includes(personalActiveTab)) {
+    const firstVisible = personalLayoutOrder.find(k => !personalLayoutHidden.includes(k));
+    if (firstVisible) personalActiveTab = firstVisible;
+  }
+}
+
+async function savePersonalLayoutPref() {
+  const payload = { type: 'pref', title: 'layout', data: { order: personalLayoutOrder, hidden: personalLayoutHidden } };
+  if (personalLayoutPrefItem) payload.id = personalLayoutPrefItem.id;
+  const res = await window.callGAS('savePersonalItem', payload);
+  if (res.status === 'success') personalLayoutPrefItem = res.data;
+}
 
 async function loadPersonalHub() {
   renderPersonalTabs();
@@ -5519,14 +5557,39 @@ async function loadPersonalHub() {
 function renderPersonalTabs() {
   const bar = document.getElementById('personal-hub-tabs');
   if (!bar) return;
-  bar.innerHTML = Object.keys(PERSONAL_TAB_META).map(type => {
+  bar.innerHTML = personalLayoutOrder.filter(type => !personalLayoutHidden.includes(type)).map(type => {
     const meta = PERSONAL_TAB_META[type];
-    return `<button type="button" class="personal-tab ${type === personalActiveTab ? 'active' : ''}" data-type="${type}" onclick="switchPersonalTab('${type}')">
+    if (!meta) return '';
+    return `<button type="button" class="personal-tab ${!personalActiveTagFilter && type === personalActiveTab ? 'active' : ''}" data-type="${type}" onclick="switchPersonalTab('${type}')">
       <i class="fa-solid ${meta.icon}"></i><span> ${meta.label}</span>
     </button>`;
   }).join('');
   const addBtn = document.getElementById('personal-add-btn');
-  if (addBtn) addBtn.style.display = personalActiveTab === 'pin' ? 'none' : 'inline-flex';
+  if (addBtn) addBtn.style.display = (personalActiveTagFilter || personalActiveTab === 'pin') ? 'none' : 'inline-flex';
+}
+
+function renderPersonalTagFilterBar() {
+  const bar = document.getElementById('personal-tag-filter');
+  if (!bar) return;
+  const allTags = new Set();
+  personalItemsCache.forEach(i => (i.tags || []).forEach(t => allTags.add(t)));
+
+  if (allTags.size === 0) { bar.innerHTML = ''; bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  const chips = Array.from(allTags).sort().map(tag => {
+    const safeTag = escapeHtml(escapeJs(tag));
+    const active = personalActiveTagFilter === tag;
+    return `<button type="button" class="personal-tag-chip ${active ? 'active' : ''}" onclick="filterByPersonalTag('${safeTag}')">#${escapeHtml(tag)}</button>`;
+  }).join('');
+  const clearBtn = personalActiveTagFilter ? `<button type="button" class="personal-tag-chip personal-tag-clear" onclick="filterByPersonalTag(null)"><i class="fa-solid fa-xmark"></i> Bỏ lọc</button>` : '';
+  bar.innerHTML = chips + clearBtn;
+}
+
+function filterByPersonalTag(tag) {
+  personalActiveTagFilter = (tag && tag !== personalActiveTagFilter) ? tag : null;
+  renderPersonalTabs();
+  renderPersonalTagFilterBar();
+  renderPersonalItems();
 }
 
 async function refreshPersonalItems() {
@@ -5539,24 +5602,36 @@ async function refreshPersonalItems() {
     console.error('Lỗi tải Personal Hub:', err);
     personalItemsCache = [];
   }
+  applyPersonalLayoutPref();
+  renderPersonalTabs();
+  renderPersonalTagFilterBar();
   renderPersonalItems();
 }
 
 function switchPersonalTab(type) {
   personalActiveTab = type;
-  document.querySelectorAll('#personal-hub-tabs .personal-tab').forEach(t => {
-    t.classList.toggle('active', t.getAttribute('data-type') === type);
-  });
-  const addBtn = document.getElementById('personal-add-btn');
-  if (addBtn) addBtn.style.display = type === 'pin' ? 'none' : 'inline-flex';
+  personalActiveTagFilter = null;
+  renderPersonalTabs();
+  renderPersonalTagFilterBar();
   renderPersonalItems();
 }
 
 function renderPersonalItems() {
   const listEl = document.getElementById('personal-hub-list');
   if (!listEl) return;
-  const items = personalItemsCache.filter(i => i.type === personalActiveTab);
-  const meta = PERSONAL_TAB_META[personalActiveTab];
+
+  let items;
+  let meta;
+  if (personalActiveTagFilter) {
+    items = personalItemsCache.filter(i => (i.tags || []).includes(personalActiveTagFilter));
+    meta = { icon: 'fa-tag', empty: `Không có mục nào gắn thẻ #${personalActiveTagFilter}.` };
+  } else {
+    items = personalItemsCache.filter(i => i.type === personalActiveTab);
+    meta = PERSONAL_TAB_META[personalActiveTab];
+    if (personalActiveTab === 'calendar_event') {
+      items = items.slice().sort((a, b) => new Date((a.data || {}).start || 0) - new Date((b.data || {}).start || 0));
+    }
+  }
 
   if (items.length === 0) {
     listEl.innerHTML = `<div class="empty-state"><i class="fa-solid ${meta.icon}"></i><p>${meta.empty}</p></div>`;
@@ -5566,9 +5641,31 @@ function renderPersonalItems() {
   listEl.innerHTML = items.map(item => renderPersonalItemCard(item)).join('');
 }
 
+function renderPersonalItemTagsHtml(item) {
+  const tags = item.tags || [];
+  if (tags.length === 0) return '';
+  return `<div class="personal-item-tags">` + tags.map(t =>
+    `<span class="personal-item-tag" onclick="event.stopPropagation(); filterByPersonalTag('${escapeHtml(escapeJs(t))}')">#${escapeHtml(t)}</span>`
+  ).join('') + `</div>`;
+}
+
 function renderPersonalItemCard(item) {
   const data = item.data || {};
   const safeId = escapeHtml(escapeJs(item.id));
+
+  if (item.type === 'calendar_event') {
+    const start = data.start ? new Date(data.start) : null;
+    const dateStr = start ? start.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: data.allDay ? undefined : '2-digit', minute: data.allDay ? undefined : '2-digit' }) : '';
+    return `
+    <div class="personal-item-card" onclick="openPersonalItemModal('${safeId}')">
+      <div class="personal-item-body">
+        <strong><i class="fa-solid fa-calendar-days" style="color: var(--science-accent); margin-right:6px;"></i>${escapeHtml(item.title || '')}</strong>
+        <p>${escapeHtml(dateStr)}</p>
+        ${renderPersonalItemTagsHtml(item)}
+      </div>
+      <button type="button" class="personal-item-delete" title="Xoá" onclick="event.stopPropagation(); deletePersonalItem('${safeId}')"><i class="fa-solid fa-trash"></i></button>
+    </div>`;
+  }
 
   if (item.type === 'checklist') {
     return `
@@ -5577,6 +5674,7 @@ function renderPersonalItemCard(item) {
         <input type="checkbox" ${data.done ? 'checked' : ''} onchange="togglePersonalChecklist('${safeId}', this.checked)">
         <span class="${data.done ? 'personal-item-done' : ''}">${escapeHtml(item.title || '')}</span>
       </label>
+      ${renderPersonalItemTagsHtml(item)}
       <button type="button" class="personal-item-delete" title="Xoá" onclick="deletePersonalItem('${safeId}')"><i class="fa-solid fa-trash"></i></button>
     </div>`;
   }
@@ -5587,6 +5685,7 @@ function renderPersonalItemCard(item) {
       <div class="personal-item-body" ${data.projectId ? `onclick="openPinnedProject('${escapeHtml(escapeJs(data.projectId))}')" style="cursor:pointer;"` : ''}>
         <i class="fa-solid fa-thumbtack" style="color: var(--science-accent);"></i>
         <span>${escapeHtml(item.title || '')}</span>
+        ${renderPersonalItemTagsHtml(item)}
       </div>
       <button type="button" class="personal-item-delete" title="Bỏ ghim" onclick="deletePersonalItem('${safeId}')"><i class="fa-solid fa-xmark"></i></button>
     </div>`;
@@ -5598,6 +5697,7 @@ function renderPersonalItemCard(item) {
       <div class="personal-item-body" onclick="openExternalUrl('${escapeHtml(escapeJs(data.url || '#'))}')" style="cursor:pointer;">
         <i class="fa-solid fa-link" style="color: var(--science-accent);"></i>
         <span>${escapeHtml(item.title || data.url || '')}</span>
+        ${renderPersonalItemTagsHtml(item)}
       </div>
       <div class="personal-item-actions">
         <button type="button" class="personal-item-delete" title="Sửa" onclick="openPersonalItemModal('${safeId}')"><i class="fa-solid fa-pen"></i></button>
@@ -5612,34 +5712,52 @@ function renderPersonalItemCard(item) {
     <div class="personal-item-body">
       <strong>${escapeHtml(item.title || 'Không tiêu đề')}</strong>
       <p>${escapeHtml((data.text || '').slice(0, 140))}</p>
+      ${renderPersonalItemTagsHtml(item)}
     </div>
     <button type="button" class="personal-item-delete" title="Xoá" onclick="event.stopPropagation(); deletePersonalItem('${safeId}')"><i class="fa-solid fa-trash"></i></button>
   </div>`;
 }
 
 function openPersonalItemModal(existingId) {
-  const type = personalActiveTab;
-  if (type === 'pin') return; // pins are only created via the "Ghim" affordance on shared lists
   const item = existingId ? personalItemsCache.find(i => i.id === existingId) : null;
+  const type = item ? item.type : personalActiveTab;
+  if (type === 'pin') return; // pins are only created via the "Ghim" affordance on shared lists
 
   document.getElementById('personal-item-id').value = existingId || '';
   document.getElementById('personal-item-type').value = type;
   document.getElementById('personal-item-title').value = item ? (item.title || '') : '';
+  document.getElementById('personal-item-tags').value = item && item.tags ? item.tags.join(', ') : '';
 
   const urlField = document.getElementById('personal-item-url-field');
   const bodyField = document.getElementById('personal-item-body-field');
+  const dateField = document.getElementById('personal-item-date-field');
+
+  urlField.style.display = type === 'shortcut' ? 'block' : 'none';
+  bodyField.style.display = type === 'note' ? 'block' : 'none';
+  dateField.style.display = type === 'calendar_event' ? 'block' : 'none';
+
   if (type === 'shortcut') {
-    urlField.style.display = 'block';
-    bodyField.style.display = 'none';
     document.getElementById('personal-item-url').value = item && item.data ? (item.data.url || '') : '';
+  } else if (type === 'calendar_event') {
+    const data = item && item.data ? item.data : {};
+    const startLocal = data.start ? new Date(data.start) : new Date(Date.now() + 30 * 60000);
+    document.getElementById('personal-item-start').value = toDatetimeLocalValue(startLocal);
+    document.getElementById('personal-item-reminder').value = data.reminderMinutesBefore != null ? String(data.reminderMinutesBefore) : '30';
   } else {
-    urlField.style.display = 'none';
-    bodyField.style.display = type === 'note' ? 'block' : 'none';
     document.getElementById('personal-item-body').value = item && item.data ? (item.data.text || '') : '';
   }
 
   document.getElementById('personal-item-modal-title').textContent = existingId ? 'Sửa mục cá nhân' : 'Thêm ' + PERSONAL_TAB_META[type].label.toLowerCase();
   openAppModal('personal-item-modal');
+}
+
+function toDatetimeLocalValue(date) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function parsePersonalTagsInput(value) {
+  return String(value || '').split(',').map(t => t.trim()).filter(Boolean);
 }
 
 async function submitPersonalItemForm(event) {
@@ -5649,6 +5767,7 @@ async function submitPersonalItemForm(event) {
   const type = document.getElementById('personal-item-type').value;
   const title = document.getElementById('personal-item-title').value.trim();
   if (!title) { showToast('Nhập tiêu đề trước đã', 'warning'); return; }
+  const tags = parsePersonalTagsInput(document.getElementById('personal-item-tags').value);
 
   let data = {};
   if (type === 'shortcut') {
@@ -5658,9 +5777,13 @@ async function submitPersonalItemForm(event) {
   } else if (type === 'checklist') {
     const existing = id ? personalItemsCache.find(i => i.id === id) : null;
     data = { done: existing && existing.data ? !!existing.data.done : false };
+  } else if (type === 'calendar_event') {
+    const startVal = document.getElementById('personal-item-start').value;
+    if (!startVal) { showToast('Chọn ngày giờ cho sự kiện', 'warning'); return; }
+    data = { start: new Date(startVal).toISOString(), reminderMinutesBefore: Number(document.getElementById('personal-item-reminder').value) || 0 };
   }
 
-  const payload = { type, title, data };
+  const payload = { type, title, data, tags };
   if (id) payload.id = id;
   const res = await window.callGAS('savePersonalItem', payload);
   if (res.status === 'success') {
@@ -5676,8 +5799,79 @@ async function togglePersonalChecklist(id, done) {
   const item = personalItemsCache.find(i => i.id === id);
   if (!item) return;
   item.data = Object.assign({}, item.data, { done });
-  await window.callGAS('savePersonalItem', { id, type: 'checklist', title: item.title, data: item.data });
+  await window.callGAS('savePersonalItem', { id, type: 'checklist', title: item.title, data: item.data, tags: item.tags || [] });
   renderPersonalItems();
+}
+
+// -------------------- Tuỳ chỉnh Personal Hub (reorder/hide tabs) --------------------
+let draggedPersonalTabKey = null;
+
+function openPersonalCustomizeModal() {
+  renderPersonalCustomizeList();
+  openAppModal('personal-customize-modal');
+}
+
+function renderPersonalCustomizeList() {
+  const list = document.getElementById('personal-customize-list');
+  if (!list) return;
+  list.innerHTML = personalLayoutOrder.map(type => {
+    const meta = PERSONAL_TAB_META[type];
+    if (!meta) return '';
+    const hidden = personalLayoutHidden.includes(type);
+    return `
+    <div class="personal-customize-row" draggable="true" data-type="${type}"
+         ondragstart="personalCustomizeDragStart(event, '${type}')"
+         ondragover="personalCustomizeDragOver(event)"
+         ondrop="personalCustomizeDrop(event, '${type}')">
+      <i class="fa-solid fa-grip-vertical personal-customize-handle"></i>
+      <i class="fa-solid ${meta.icon}"></i>
+      <span class="personal-customize-label">${meta.label}</span>
+      <label class="personal-customize-toggle">
+        <input type="checkbox" ${hidden ? '' : 'checked'} onchange="togglePersonalTabVisibility('${type}', this.checked)">
+        Hiện
+      </label>
+    </div>`;
+  }).join('');
+}
+
+function personalCustomizeDragStart(event, type) {
+  draggedPersonalTabKey = type;
+  event.dataTransfer.effectAllowed = 'move';
+}
+
+function personalCustomizeDragOver(event) {
+  event.preventDefault();
+}
+
+function personalCustomizeDrop(event, targetType) {
+  event.preventDefault();
+  if (!draggedPersonalTabKey || draggedPersonalTabKey === targetType) return;
+  const fromIdx = personalLayoutOrder.indexOf(draggedPersonalTabKey);
+  const toIdx = personalLayoutOrder.indexOf(targetType);
+  if (fromIdx === -1 || toIdx === -1) return;
+  personalLayoutOrder.splice(fromIdx, 1);
+  personalLayoutOrder.splice(toIdx, 0, draggedPersonalTabKey);
+  draggedPersonalTabKey = null;
+  renderPersonalCustomizeList();
+}
+
+function togglePersonalTabVisibility(type, visible) {
+  personalLayoutHidden = visible ? personalLayoutHidden.filter(t => t !== type) : personalLayoutHidden.concat([type]);
+}
+
+async function submitPersonalCustomize() {
+  if (personalLayoutOrder.filter(t => !personalLayoutHidden.includes(t)).length === 0) {
+    showToast('Phải hiện ít nhất 1 mục', 'warning');
+    return;
+  }
+  await savePersonalLayoutPref();
+  closeAppModal('personal-customize-modal');
+  if (personalLayoutHidden.includes(personalActiveTab)) {
+    personalActiveTab = personalLayoutOrder.find(t => !personalLayoutHidden.includes(t));
+  }
+  renderPersonalTabs();
+  renderPersonalItems();
+  showToast('Đã lưu bố cục', 'success');
 }
 
 async function deletePersonalItem(id) {
