@@ -25,7 +25,6 @@ npx tauri build
 Nếu Terminal báo lỗi: `Error: A public key has been found, but no private key...` thì bạn không cần Build lại! Bạn chỉ cần chạy tiếp cụm lệnh sau để ký file bằng tay:
 
 ```powershell
-Remove-Item Env:\TAURI_SIGNING_PRIVATE_KEY_PATH -ErrorAction SilentlyContinue
 $env:TAURI_SIGNING_PRIVATE_KEY = Get-Content C:\Users\Admin\Music\WorkHub-main\workhub.key -Raw
 $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "workhub28826"
 npx tauri signer sign C:\Users\Admin\Music\workhub-sci\src-tauri\target\release\bundle\nsis\WorkHub-Sci_0.1.1_x64-setup.exe

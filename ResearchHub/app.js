@@ -96,7 +96,7 @@ const viewText = {
   synthesis: ["Tổng hợp", "Tổng hợp danh mục", "Tạo bản tóm tắt quản lý nghiên cứu có cấu trúc từ danh mục hiện tại."]
 };
 
-const API_BASE = window.__TAURI__ ? "https://workhub-sci.pages.dev" : "";
+const API_BASE = (window.__TAURI__ || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") ? "https://workhub-sci.pages.dev" : "";
 
 async function fetchTopicsFromServer() {
   const response = await fetch(`${API_BASE}/api/topics`);
