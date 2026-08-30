@@ -57,7 +57,9 @@ const ALLOWED_GROUPS = ['science', 'admin'];
 let CURRENT_USER = {
   email: '',
   nickname: '',
-  groupKey: ''
+  groupKey: '',
+  role: 'editor' // Phase B RBAC: viewer/editor/admin within activeGroup — fetched in
+                 // resolveUserProfile(), defaults to editor (today's status quo) until then
 };
 
 const auth = sbClient ? sbClient.auth : null;
@@ -330,6 +332,13 @@ async function resolveUserProfile(user) {
     CURRENT_USER.groupKey = 'guest';
   }
 
+  try {
+    CURRENT_USER.role = await API.auth.getMyRole('science');
+  } catch (e) {
+    console.warn('Không lấy được vai trò người dùng, mặc định Editor:', e);
+    CURRENT_USER.role = 'editor';
+  }
+
   if (!ALLOWED_GROUPS.includes(CURRENT_USER.groupKey)) {
     document.body.classList.add('app-locked');
     closeAuthModal(true);
@@ -357,6 +366,7 @@ async function resolveUserProfile(user) {
   unlockApp();
   updateUserProfileUI();
   updateAuditLogButtonVisibility();
+  updateRoleGatedUI();
 
   // Bật đồng bộ thời gian thực mỗi lần xác thực thành công — an toàn để gọi lại nhiều lần
   // vì API.realtime.subscribe() tự hủy kênh cũ trước khi mở kênh mới (xem api.js).
@@ -392,11 +402,12 @@ async function initAuth() {
         logPipelineEvent(`Đã đăng nhập tài khoản: ${user.email}`, 'success', 'USER_LOGIN');
       }
     } else {
-      CURRENT_USER = { email: '', nickname: '', groupKey: '', id: '' };
+      CURRENT_USER = { email: '', nickname: '', groupKey: '', id: '', role: 'editor' };
       window.__currentUserId = null;
       if (typeof stopRealtimeSync === 'function') stopRealtimeSync();
       if (chatChannel && sbClient) { sbClient.removeChannel(chatChannel); chatChannel = null; }
       updateAuditLogButtonVisibility();
+      updateRoleGatedUI();
       lockApp();
     }
   });
@@ -1638,6 +1649,10 @@ function toggleArchivedProjectsView() {
 }
 
 function deleteProjectAction(projectId, projectName) {
+  if (!isGroupAdminRole()) {
+    showToast('Chỉ Admin của nhóm mới có quyền xóa dự án.', 'error');
+    return;
+  }
   Swal.fire({
     title: 'CẢNH BÁO XÓA DỰ ÁN!',
     html: `Bạn đang chọn xóa dự án: <b>"${escapeHtml(projectName)}"</b><br><br>
@@ -1684,6 +1699,10 @@ function deleteProjectAction(projectId, projectName) {
 }
 
 async function handleProjectCreationOrUpdate() {
+  if (isViewerRole()) {
+    showToast('Bạn chỉ có quyền xem (Viewer) — không thể tạo/cập nhật dự án.', 'warning');
+    return;
+  }
   const btn = document.getElementById('update-progress-btn');
   const nameInput = document.getElementById('progress-project-name');
   const noteInput = document.getElementById('progress-note-input');
@@ -2593,6 +2612,10 @@ function resetTaskModalUI() {
 }
 
 function openAddTask() {
+  if (isViewerRole()) {
+    showToast('Bạn chỉ có quyền xem (Viewer) — không thể tạo công việc mới.', 'warning');
+    return;
+  }
   resetTaskModalUI();
   if (currentTaskProjectID) {
     const projInput = document.getElementById('new-task-project-id');
@@ -2675,6 +2698,10 @@ function openEditTask(id, name, status, priority, dueDate, assigneesStr, descrip
 
 async function handleTaskFormSubmit(e) {
   if (e) e.preventDefault();
+  if (isViewerRole()) {
+    showToast('Bạn chỉ có quyền xem (Viewer) — không thể tạo/sửa công việc.', 'warning');
+    return;
+  }
 
   // Nút "Lưu Công Việc" nằm ngoài <form> (liên kết qua thuộc tính form="task-form" ở
   // .modal-footer), nên form.querySelector(...) không tìm thấy nó -- phải tìm toàn trang.
@@ -4866,6 +4893,17 @@ function updateAuditLogButtonVisibility() {
   if (btn) btn.style.display = CURRENT_USER.groupKey === 'admin' ? '' : 'none';
 }
 
+// -------------------- Phase B RBAC: role-gated UI (cosmetic — RLS is the real backstop) --------------------
+function isViewerRole() { return CURRENT_USER.role === 'viewer'; }
+function isGroupAdminRole() { return CURRENT_USER.role === 'admin'; }
+
+function updateRoleGatedUI() {
+  const newTaskBtn = document.getElementById('new-task-btn');
+  if (newTaskBtn) newTaskBtn.style.display = isViewerRole() ? 'none' : '';
+  const roleMgmtBtn = document.getElementById('role-mgmt-toggle-btn');
+  if (roleMgmtBtn) roleMgmtBtn.style.display = isGroupAdminRole() ? '' : 'none';
+}
+
 let auditLogOffset = 0;
 const AUDIT_LOG_PAGE_SIZE = 50;
 
@@ -5031,6 +5069,65 @@ function exportTeamStatusCsv() {
     p.owner, p.updatedAt ? new Date(p.updatedAt).toLocaleString('vi-VN') : ''
   ]));
   downloadCsv(`tinh-hinh-doi-nhom-${stamp()}.csv`, rows);
+}
+
+// -------------------- Phase B RBAC: role-management modal (admin-only) --------------------
+const ROLE_LABELS = { viewer: 'Viewer', editor: 'Editor', admin: 'Admin' };
+
+function openRoleMgmtModal() {
+  openAppModal('role-mgmt-modal');
+  loadRoleMgmtTable();
+}
+
+async function loadRoleMgmtTable() {
+  const tbody = document.getElementById('role-mgmt-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="3" style="padding:8px; color:var(--text-muted); font-size:12.5px;">Đang tải...</td></tr>';
+  try {
+    const [users, roles] = await Promise.all([
+      API.auth.getAllUsers('science'),
+      API.roles.listAll()
+    ]);
+    renderRoleMgmtTable(users, roles.filter(r => r.group_key === 'science'));
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="3" style="color:var(--danger-color); padding:8px;">Lỗi: ${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+function renderRoleMgmtTable(users, roles) {
+  const tbody = document.getElementById('role-mgmt-table-body');
+  if (!tbody) return;
+  if (!users || users.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" style="padding:8px; color:var(--text-muted); font-size:12.5px;">Chưa có thành viên nào.</td></tr>';
+    return;
+  }
+  const roleMap = new Map(roles.map(r => [r.user_id, r.role]));
+  tbody.innerHTML = users.map(u => {
+    const effectiveRole = roleMap.get(u.id) || 'editor';
+    const roleOptions = Object.keys(ROLE_LABELS).map(r =>
+      `<option value="${r}" ${r === effectiveRole ? 'selected' : ''}>${ROLE_LABELS[r]}</option>`
+    ).join('');
+    return `<tr>
+      <td>${escapeHtml(u.email)}</td>
+      <td>${escapeHtml(u.name || '')}</td>
+      <td>
+        <select class="form-select form-select-sm" onchange="updateMemberRoleAction('${escapeHtml(escapeJs(u.id))}', this.value)">
+          ${roleOptions}
+        </select>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function updateMemberRoleAction(userId, newRole) {
+  try {
+    const response = await callGAS('updateMemberRole', { userId, groupKey: 'science', role: newRole });
+    if (response.status !== 'success') throw new Error(response.message);
+    showToast(response.data || response.message, 'success');
+  } catch (err) {
+    showToast('Lỗi: ' + err.message, 'error');
+    loadRoleMgmtTable();
+  }
 }
 
 async function restoreItemClick(category, id) {

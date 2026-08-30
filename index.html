@@ -56,6 +56,10 @@
         <i class="fa-solid fa-chart-pie"></i>
       </button>
 
+      <button class="header-btn" id="role-mgmt-toggle-btn" title="Phân quyền thành viên" onclick="openRoleMgmtModal()" style="display:none;">
+        <i class="fa-solid fa-user-shield"></i>
+      </button>
+
       <button class="header-btn" id="observation-toggle-btn" title="Observatory">
         <i class="fa-solid fa-bell"></i>
         <span class="noti-badge" id="noti-unread-indicator"></span>
@@ -425,7 +429,7 @@
           <p>Danh sách công việc theo từng dự án của nhóm Science.</p>
         </div>
         <div class="section-actions">
-          <button class="btn btn-primary" onclick="openAddTask()"><i class="fa-solid fa-plus"></i> Công việc mới</button>
+          <button class="btn btn-primary" id="new-task-btn" onclick="openAddTask()"><i class="fa-solid fa-plus"></i> Công việc mới</button>
         </div>
       </div>
 
@@ -1533,6 +1537,37 @@
     </div>
   </div>
 
+  <!-- Role Management Modal (admin-only; the header-button visibility is cosmetic — real
+       enforcement is the member_roles RLS policies, a non-admin session's updateMemberRole
+       call gets rejected by RLS regardless) -->
+  <div class="modal-overlay" id="role-mgmt-modal">
+    <div class="modal-card" style="max-width: 640px;">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-user-shield" style="color: var(--science-accent);"></i> Phân quyền thành viên</h3>
+        <button class="header-btn" onclick="closeAppModal('role-mgmt-modal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Biệt danh</th>
+                <th style="width: 160px;">Vai trò</th>
+              </tr>
+            </thead>
+            <tbody id="role-mgmt-table-body">
+              <tr><td colspan="3" style="padding:8px; color:var(--text-muted); font-size:12.5px;">Đang tải...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeAppModal('role-mgmt-modal')">Đóng</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Global Search Palette (Ctrl/Cmd + K) -->
   <div id="search-palette" class="search-palette" style="display:none;">
     <div class="search-palette-box">
@@ -1552,7 +1587,7 @@
   <script src="sync-config.js?v=2"></script>
   <script src="sync-engine.js?v=1"></script>
   <script src="personal-sync.js?v=1"></script>
-  <script src="script.js?v=32"></script>
+  <script src="script.js?v=33"></script>
   <script src="tray-hotkey.js?v=1"></script>
   <script src="sync-conflict-ui.js?v=1"></script>
   <script src="notify-deadlines.js?v=2"></script>
