@@ -2092,6 +2092,18 @@ body.app-locked .user-profile-wrapper {
 .trash-age { font-size: 10.5px; color: var(--text-muted); display: block; margin-top: 2px; }
 .trash-age.is-old { color: var(--danger-color); font-weight: 700; }
 
+/* --- Card-list layout for audit log rows (trash modal here uses a <table>, but this
+   pattern — reused verbatim from wh-fin's script.js — needs the card classes too) --- */
+.trash-list { display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto; margin-bottom: 4px; }
+.trash-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px;
+  background: var(--hover-bg); border: 1px solid var(--border-color); border-radius: var(--radius-sm);
+  flex-wrap: wrap;
+}
+.trash-item-info { min-width: 0; flex: 1; }
+.trash-item-name { color: var(--text-primary); font-weight: 600; font-size: 13.5px; }
+.trash-item-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+
 /* -------------------- Journal Khoa Học: khu vực làm việc kiểu trang tài liệu --------------------
    Deliberately paper-white regardless of the app's dark theme (like Word/Docs' editing
    canvas even in "dark mode") -- the point is to feel like an actual page being written,
