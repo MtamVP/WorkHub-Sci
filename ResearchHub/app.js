@@ -96,8 +96,10 @@ const viewText = {
   synthesis: ["Tổng hợp", "Tổng hợp danh mục", "Tạo bản tóm tắt quản lý nghiên cứu có cấu trúc từ danh mục hiện tại."]
 };
 
+const API_BASE = window.__TAURI__ ? "https://workhub-sci.pages.dev" : "";
+
 async function fetchTopicsFromServer() {
-  const response = await fetch("/api/topics");
+  const response = await fetch(`${API_BASE}/api/topics`);
   if (!response.ok) throw new Error("Failed to load topics from server.");
   const payload = await response.json();
   if (!Array.isArray(payload.topics)) throw new Error("Malformed topics response.");
@@ -123,7 +125,7 @@ function setOnline(online) {
 }
 
 async function createTopic(topic) {
-  const response = await fetch("/api/topics", {
+  const response = await fetch(`${API_BASE}/api/topics`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(topic)
@@ -134,7 +136,7 @@ async function createTopic(topic) {
 }
 
 async function updateTopic(id, topic, expectedUpdatedAt) {
-  const response = await fetch(`/api/topics/${encodeURIComponent(id)}`, {
+  const response = await fetch(`${API_BASE}/api/topics/${encodeURIComponent(id)}`, {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ topic, expectedUpdatedAt })
@@ -149,7 +151,7 @@ async function updateTopic(id, topic, expectedUpdatedAt) {
 }
 
 async function deleteTopicRemote(id) {
-  const response = await fetch(`/api/topics/${encodeURIComponent(id)}`, { method: "DELETE" });
+  const response = await fetch(`${API_BASE}/api/topics/${encodeURIComponent(id)}`, { method: "DELETE" });
   if (!response.ok) throw new Error("Failed to delete topic.");
 }
 
@@ -268,7 +270,7 @@ async function loadWhoami() {
     console.warn("Không thể lấy phiên Supabase:", error);
   }
   try {
-    const response = await fetch("/api/whoami");
+    const response = await fetch(`${API_BASE}/api/whoami`);
     if (!response.ok) return;
     const payload = await response.json();
     if (payload.email) {
@@ -1563,8 +1565,12 @@ async function openBackups() {
     <div id="backupsListBody"><p class="muted">Đang tải danh sách sao lưu...</p></div>`;
   els.backupsDialog.showModal();
   document.querySelector("#closeBackupsButton").addEventListener("click", () => els.backupsDialog.close());
+  fetchBackups();
+}
+
+async function fetchBackups() {
   try {
-    const response = await fetch("/api/backups");
+    const response = await fetch(`${API_BASE}/api/backups`);
     if (!response.ok) throw new Error("Failed to load backups.");
     const payload = await response.json();
     const body = document.querySelector("#backupsListBody");
@@ -1589,7 +1595,7 @@ async function openBackups() {
 
 async function downloadBackup(id) {
   try {
-    const response = await fetch(`/api/backups/${id}`);
+    const response = await fetch(`${API_BASE}/api/backups/${id}`);
     if (!response.ok) throw new Error("Failed to load backup.");
     const payload = await response.json();
     download(`research-hub-backup-${payload.id}.json`, JSON.stringify({ schemaVersion: 2, exportedAt: payload.createdAt, topics: payload.topics }, null, 2), "application/json");
