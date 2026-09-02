@@ -40,6 +40,11 @@
         <i class="fa-solid fa-moon"></i>
       </button>
 
+      <button class="header-btn" id="observation-toggle-btn" title="Observatory">
+        <i class="fa-solid fa-bell"></i>
+        <span class="noti-badge" id="noti-unread-indicator"></span>
+      </button>
+
       <button class="header-btn" id="open-search-btn" onclick="openSearchPalette()" title="Tìm kiếm (Ctrl+K)">
         <i class="fa-solid fa-magnifying-glass"></i>
       </button>
@@ -62,11 +67,6 @@
 
       <button class="header-btn" id="role-mgmt-toggle-btn" title="Phân quyền thành viên" onclick="openRoleMgmtModal()" style="display:none;">
         <i class="fa-solid fa-user-shield"></i>
-      </button>
-
-      <button class="header-btn" id="observation-toggle-btn" title="Observatory">
-        <i class="fa-solid fa-bell"></i>
-        <span class="noti-badge" id="noti-unread-indicator"></span>
       </button>
 
       <div class="user-profile-wrapper" id="user-profile-wrapper">
@@ -160,7 +160,7 @@
 
       <div class="nav-group-label"><span>Quản Trị</span></div>
       <ul class="nav-group">
-        <li class="nav-item" onclick="window.top.location.href='/roles/'" title="Phân Quyền">
+        <li class="nav-item" data-section="sci-roles" onclick="switchSection('sci-roles')" title="Phân Quyền">
           <i class="fa-solid fa-user-shield"></i><span> Phân Quyền</span>
         </li>
       </ul>
@@ -968,6 +968,59 @@
       </div>
     </section>
 
+    <section class="app-section" id="sci-roles-section">
+      <div class="section-hero-card card">
+        <div class="section-hero-info">
+          <h3><i class="fa-solid fa-user-shield" style="color: var(--cyan-accent);"></i> Phân Quyền Nhóm</h3>
+          <p>Vai trò cấp 2 riêng của WorkHub Science — độc lập với nhóm (group) do org quản lý. Quyết định ai được toàn quyền quản trị Pipeline / Tài liệu / Công cụ thay người khác.</p>
+        </div>
+        <div class="section-actions">
+          <button class="btn btn-outline" onclick="loadSciRoles()"><i class="fa-solid fa-rotate-right"></i> Làm mới</button>
+        </div>
+      </div>
+
+      <div id="sci-roles-admin-panel" class="card roles-admin-panel" style="display:none;">
+          <h3 class="roles-panel-title"><i class="fa-solid fa-user-plus"></i> Gán vai trò</h3>
+          <form id="sci-roles-grant-form" class="grant-form-grid" onsubmit="handleSciRoleGrant(event)">
+              <div class="form-group">
+                  <label class="form-label" for="sci-roles-grant-member">Thành viên</label>
+                  <select id="sci-roles-grant-member" class="form-select" required>
+                      <option value="">-- Chọn --</option>
+                  </select>
+              </div>
+              <div class="form-group">
+                  <label class="form-label" for="sci-roles-grant-role">Vai trò</label>
+                  <select id="sci-roles-grant-role" class="form-select">
+                      <option value="lab_director">Trưởng Phòng Thí Nghiệm</option>
+                      <option value="collaborator">Cộng Tác Viên</option>
+                      <option value="representative">Người Đại Diện</option>
+                      <option value="sci_admin">Quản trị phân quyền</option>
+                      <option value="platform_lead">Phụ Trách Nền Tảng (toàn quyền)</option>
+                  </select>
+              </div>
+              <div class="form-group">
+                  <label>&nbsp;</label>
+                  <button type="submit" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Gán vai trò</button>
+              </div>
+          </form>
+      </div>
+
+      <div class="table-container card">
+          <table class="data-table" id="sci-roles-table" style="width:100%;">
+              <thead>
+                  <tr>
+                      <th>Thành viên</th>
+                      <th>Vai trò hiện tại</th>
+                      <th class="text-right">Thao tác</th>
+                  </tr>
+              </thead>
+              <tbody id="sci-roles-table-body">
+                  <tr><td colspan="3" class="empty-state">Đang tải...</td></tr>
+              </tbody>
+          </table>
+      </div>
+    </section>
+
     </main>
   </div>
 
@@ -1492,7 +1545,9 @@
         <div id="audit-log-guard"></div>
         <div id="audit-log-body">
           <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
-            <input type="text" id="audit-log-filter-email" class="form-input" placeholder="Email người thực hiện" style="max-width:220px;">
+            <select id="audit-log-filter-email" class="form-select" style="max-width:220px;">
+              <option value="">Tất cả email</option>
+            </select>
             <select id="audit-log-filter-entity" class="form-select" style="max-width:180px;">
               <option value="">Tất cả đối tượng</option>
               <option value="tasks">Công việc</option>

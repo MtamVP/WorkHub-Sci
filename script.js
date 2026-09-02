@@ -781,7 +781,7 @@ const SECTION_KEYS = ['dashboard', 'chat', 'pipeline', 'journal', 'task', 'progr
 // Cờ tải-một-lần cho các section được nạp lười (chỉ gọi API lần đầu ghé thăm).
 // Pipeline/Task/Progress/Calendar không có mặt ở đây vì dữ liệu của chúng đã được
 // nạp sẵn ngay sau khi đăng nhập (xem resolveUserProfile ở trên).
-const SECTION_LOADED = { dashboard: false, drive: false, mytasks: false, chat: false, journal: false, personal: false };
+const SECTION_LOADED = { dashboard: false, drive: false, mytasks: false, chat: false, journal: false, personal: false, sciroles: false };
 
 function switchSection(name) {
   document.querySelectorAll('.app-section').forEach(el => el.classList.remove('active'));
@@ -812,6 +812,9 @@ function switchSection(name) {
   } else if (name === 'personal' && !SECTION_LOADED.personal) {
     SECTION_LOADED.personal = true;
     loadPersonalHub();
+  } else if (name === 'sci-roles' && !SECTION_LOADED.sciroles) {
+    SECTION_LOADED.sciroles = true;
+    initSciRoles();
   }
 }
 
@@ -4985,8 +4988,23 @@ function updateRoleGatedUI() {
 let auditLogOffset = 0;
 const AUDIT_LOG_PAGE_SIZE = 50;
 
-function openAuditLogModal() {
+async function openAuditLogModal() {
   openAppModal('audit-log-modal');
+
+  const emailSelect = document.getElementById('audit-log-filter-email');
+  if (emailSelect && emailSelect.tagName === 'SELECT' && emailSelect.options.length <= 1) {
+    try {
+      const { data } = await window.supabaseClient.from('users').select('email').eq('group_key', 'admin');
+      if (data) {
+        emailSelect.innerHTML = '<option value="">Tất cả email</option>' + data.map(u => 
+          `<option value="${escapeHtml(u.email)}">${escapeHtml(u.email)}</option>`
+        ).join('');
+      }
+    } catch (err) {
+      console.error("Lỗi tải danh sách admin:", err);
+    }
+  }
+
   loadAuditLog();
 }
 
@@ -6642,4 +6660,113 @@ async function renderRelatedPanel() {
   } catch (err) {
     listEl.innerHTML = `<div class="empty-state"><i class="fa-solid fa-triangle-exclamation"></i><p>Lỗi: ${escapeHtml(err.message || String(err))}</p></div>`;
   }
+}
+
+// -------------------- Sci Roles (Phân Quyền Nhóm) --------------------
+let isSciAdminRole = false;
+
+const SCI_ROLE_LABELS = {
+    lab_director: 'Trưởng Phòng Thí Nghiệm', collaborator: 'Cộng Tác Viên', representative: 'Người Đại Diện',
+    sci_admin: 'Quản trị phân quyền',
+    platform_lead: 'Phụ Trách Nền Tảng'
+};
+
+async function initSciRoles() {
+    try {
+        const myRolesResp = await callGAS('getMySciRoles', { email: CURRENT_USER.email });
+        const myRoles = myRolesResp.data || [];
+        isSciAdminRole = myRoles.includes('sci_admin') || myRoles.includes('platform_lead');
+    } catch (e) {
+        console.error('Lỗi getMySciRoles:', e);
+    }
+
+    const adminPanel = document.getElementById('sci-roles-admin-panel');
+    if (adminPanel) adminPanel.style.display = isSciAdminRole ? 'block' : 'none';
+
+    await loadSciRoles();
+}
+
+async function loadSciRoles() {
+    const tbody = document.getElementById('sci-roles-table-body');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="3" class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> Đang tải...</td></tr>';
+
+    try {
+        const response = await callGAS('listSciRoles');
+        const members = response.data || [];
+
+        if (members.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="empty-state">Chưa có thành viên nào trong nhóm Science.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = members.map(m => `
+            <tr>
+                <td>
+                    <div class="member-name">${escapeHtml(m.nickname)}</div>
+                    <div class="member-email">${escapeHtml(m.email)}</div>
+                </td>
+                <td>${renderSciRoleBadges(m)}</td>
+                <td class="text-right">${renderSciRoleRevokeButtons(m)}</td>
+            </tr>`).join('');
+
+        if (isSciAdminRole) populateSciRoleMemberSelect(members);
+    } catch (e) {
+        console.error('Lỗi loadSciRoles:', e);
+        tbody.innerHTML = `<tr><td colspan="3" class="empty-state text-danger">Lỗi: ${escapeHtml(e.message)}</td></tr>`;
+    }
+}
+
+function renderSciRoleBadges(member) {
+    if (!member.roles || member.roles.length === 0) {
+        return '<span class="role-badge role-badge-none">Chưa có vai trò</span>';
+    }
+    return member.roles.map(r => `<span class="role-badge"><i class="fa-solid fa-shield-halved"></i>${escapeHtml(SCI_ROLE_LABELS[r] || r)}</span>`).join('');
+}
+
+function renderSciRoleRevokeButtons(member) {
+    if (!isSciAdminRole || !member.roles || member.roles.length === 0) return '';
+    return member.roles.map(r => `
+        <button type="button" class="btn-revoke icon-btn danger" data-email="${escapeHtml(escapeJs(member.email))}" data-role="${escapeHtml(escapeJs(r))}"
+            onclick="handleSciRoleRevoke(this)" title="Gỡ vai trò: ${escapeHtml(SCI_ROLE_LABELS[r] || r)}">
+            <i class="fa-solid fa-xmark"></i>
+        </button>`).join('');
+}
+
+function populateSciRoleMemberSelect(members) {
+    const select = document.getElementById('sci-roles-grant-member');
+    if (!select) return;
+    select.innerHTML = '<option value="">-- Chọn --</option>' +
+        members.map(m => `<option value="${escapeHtml(m.email)}">${escapeHtml(m.nickname)} (${escapeHtml(m.email)})</option>`).join('');
+}
+
+async function handleSciRoleGrant(e) {
+    if (e) e.preventDefault();
+    const targetEmail = document.getElementById('sci-roles-grant-member')?.value;
+    const role = document.getElementById('sci-roles-grant-role')?.value;
+
+    if (!targetEmail) {
+        showToast('Vui lòng chọn thành viên', 'error');
+        return;
+    }
+
+    try {
+        await callGAS('grantSciRole', { targetEmail, role, byEmail: CURRENT_USER.email });
+        showToast('Đã gán vai trò thành công', 'success');
+        await loadSciRoles();
+    } catch (e) {
+        showToast('Lỗi: ' + e.message, 'error');
+    }
+}
+
+async function handleSciRoleRevoke(btn) {
+    const targetEmail = btn.dataset.email;
+    const role = btn.dataset.role;
+    try {
+        await callGAS('revokeSciRole', { targetEmail, role });
+        showToast('Đã gỡ vai trò', 'success');
+        await loadSciRoles();
+    } catch (e) {
+        showToast('Lỗi: ' + e.message, 'error');
+    }
 }
