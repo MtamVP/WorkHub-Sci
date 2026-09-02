@@ -1,0 +1,5 @@
+# Enterprise-readiness mục 4 -- loại các thư mục không phải HTML do người viết tay: build
+# artifact, chỉ có cục bộ khi đã build, không commit.
+node_modules/
+tauri-dist/
+src-tauri/
