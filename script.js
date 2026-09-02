@@ -365,7 +365,6 @@ async function resolveUserProfile(user) {
 
   unlockApp();
   updateUserProfileUI();
-  updateAuditLogButtonVisibility();
   updateBackupRestoreButtonVisibility();
   updateRoleGatedUI();
 
@@ -407,7 +406,6 @@ async function initAuth() {
       window.__currentUserId = null;
       if (typeof stopRealtimeSync === 'function') stopRealtimeSync();
       if (chatChannel && sbClient) { sbClient.removeChannel(chatChannel); chatChannel = null; }
-      updateAuditLogButtonVisibility();
       updateBackupRestoreButtonVisibility();
       updateRoleGatedUI();
       lockApp();
@@ -776,7 +774,7 @@ function skeletonListItems(count) {
 
 // -------------------- Section navigation (Tổng Quan / Pipeline / Task / Progress / Calendar / Drive / My Tasks) --------------------
 
-const SECTION_KEYS = ['dashboard', 'chat', 'pipeline', 'journal', 'task', 'progress', 'calendar', 'drive', 'mytasks', 'personal'];
+const SECTION_KEYS = ['dashboard', 'chat', 'pipeline', 'journal', 'task', 'progress', 'calendar', 'drive', 'mytasks', 'personal', 'team-status', 'audit-log'];
 
 // Cờ tải-một-lần cho các section được nạp lười (chỉ gọi API lần đầu ghé thăm).
 // Pipeline/Task/Progress/Calendar không có mặt ở đây vì dữ liệu của chúng đã được
@@ -815,6 +813,16 @@ function switchSection(name) {
   } else if (name === 'sci-roles' && !SECTION_LOADED.sciroles) {
     SECTION_LOADED.sciroles = true;
     initSciRoles();
+  }
+
+  // Admin/reporting views reload fresh on every visit (no lazy-once cache) — matches
+  // wh-org's own admin-section behavior, and fresher data matters more here than
+  // avoiding a re-fetch.
+  if (name === 'team-status') {
+    loadTeamStatus();
+  }
+  if (name === 'audit-log') {
+    loadAuditLog();
   }
 }
 
@@ -4965,15 +4973,6 @@ async function purgeOldTrash(category, idsJoined) {
 }
 
 // -------------------- Audit log (compliance) --------------------
-// Nav-button visibility here is a UX nicety, not the enforcement — call this once
-// CURRENT_USER.groupKey is known (see resolveUserProfile). Real enforcement is the
-// audit_log RLS policy (current_user_group() = 'admin'); a non-admin session gets
-// zero rows back from getAuditLog regardless of whether this button is shown.
-function updateAuditLogButtonVisibility() {
-  const btn = document.getElementById('audit-log-toggle-btn');
-  if (btn) btn.style.display = CURRENT_USER.groupKey === 'admin' ? '' : 'none';
-}
-
 // -------------------- Phase B RBAC: role-gated UI (cosmetic — RLS is the real backstop) --------------------
 function isViewerRole() { return CURRENT_USER.role === 'viewer'; }
 function isGroupAdminRole() { return CURRENT_USER.role === 'admin'; }
@@ -4987,26 +4986,6 @@ function updateRoleGatedUI() {
 
 let auditLogOffset = 0;
 const AUDIT_LOG_PAGE_SIZE = 50;
-
-async function openAuditLogModal() {
-  openAppModal('audit-log-modal');
-
-  const emailSelect = document.getElementById('audit-log-filter-email');
-  if (emailSelect && emailSelect.tagName === 'SELECT' && emailSelect.options.length <= 1) {
-    try {
-      const { data } = await window.supabaseClient.from('users').select('email').eq('group_key', 'admin');
-      if (data) {
-        emailSelect.innerHTML = '<option value="">Tất cả email</option>' + data.map(u => 
-          `<option value="${escapeHtml(u.email)}">${escapeHtml(u.email)}</option>`
-        ).join('');
-      }
-    } catch (err) {
-      console.error("Lỗi tải danh sách admin:", err);
-    }
-  }
-
-  loadAuditLog();
-}
 
 function getAuditLogFilters() {
   return {
@@ -5032,6 +5011,20 @@ async function loadAuditLog() {
   }
   guard.innerHTML = '';
   body.style.display = 'block';
+
+  const emailSelect = document.getElementById('audit-log-filter-email');
+  if (emailSelect && emailSelect.tagName === 'SELECT' && emailSelect.options.length <= 1) {
+    try {
+      const { data } = await window.supabaseClient.from('users').select('email').eq('group_key', 'admin');
+      if (data) {
+        emailSelect.innerHTML = '<option value="">Tất cả email</option>' + data.map(u =>
+          `<option value="${escapeHtml(u.email)}">${escapeHtml(u.email)}</option>`
+        ).join('');
+      }
+    } catch (err) {
+      console.error("Lỗi tải danh sách admin:", err);
+    }
+  }
 
   auditLogOffset = 0;
   list.innerHTML = '<div style="padding:8px; color:var(--text-muted); font-size:12.5px;">Đang tải...</div>';
@@ -5257,11 +5250,6 @@ async function restoreFromBackupAction() {
 }
 
 // -------------------- Team status (light KPI strip, no admin gate — own-team data) --------------------
-function openTeamStatusModal() {
-  openAppModal('team-status-modal');
-  loadTeamStatus();
-}
-
 async function loadTeamStatus() {
   const kpiRow = document.getElementById('team-status-kpi-row');
   const table = document.getElementById('team-status-project-table');
