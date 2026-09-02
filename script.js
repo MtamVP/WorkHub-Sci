@@ -1330,6 +1330,8 @@ async function loadProjectOverview(options) {
     if (filterOwnerDropdown) filterOwnerDropdown.innerHTML = loadingOpt;
   }
 
+  if (typeof populateProgressOrgUnitSelect === 'function') populateProgressOrgUnitSelect();
+
   try {
     const response = await callGAS('getProjectList', {
       filters: {},
@@ -1742,11 +1744,13 @@ async function handleProjectCreationOrUpdate() {
   const nameInput = document.getElementById('progress-project-name');
   const noteInput = document.getElementById('progress-note-input');
   const statusInput = document.getElementById('progress-status-select');
+  const orgUnitInput = document.getElementById('progress-org-unit-select');
   const selectInput = document.getElementById('project-select');
 
   const newName = nameInput.value.trim();
   const note = noteInput.value.trim();
   const status = statusInput ? statusInput.value : '';
+  const orgUnitId = orgUnitInput ? orgUnitInput.value : '';
   const selectedProjectId = selectInput.value;
 
   const originalText = btn.innerHTML;
@@ -1760,7 +1764,8 @@ async function handleProjectCreationOrUpdate() {
         owner: CURRENT_USER.email || 'Unknown',
         status: status || 'Planning',
         description: note,
-        groupKey: CURRENT_USER.groupKey
+        groupKey: CURRENT_USER.groupKey,
+        orgUnitId: orgUnitId
       });
 
       if (response.status === 'success') {
@@ -1779,6 +1784,7 @@ async function handleProjectCreationOrUpdate() {
         status,
         description: note,
         groupKey: CURRENT_USER.groupKey,
+        orgUnitId: orgUnitId,
         expectedVersion: currentProject ? currentProject.version : undefined
       });
 
@@ -1797,6 +1803,41 @@ async function handleProjectCreationOrUpdate() {
   } finally {
     btn.innerHTML = originalText;
     btn.disabled = false;
+  }
+}
+
+// -------------------- Phase C: Org hierarchy (sub-teams / "Tổ") --------------------
+// Read-visibility + reporting-rollup only, managed from wh-org's admin panel. This app
+// only needs to offer the picker on its own project form -- CURRENT_USER.groupKey is
+// always 'science' here, so no cross-group complexity like wh-org's admin table.
+
+function orgUnitDepth(unitId, unitsById) {
+  let depth = 0;
+  let cursor = unitsById.get(unitId);
+  const seen = new Set();
+  while (cursor && cursor.parent_id && !seen.has(cursor.id)) {
+    seen.add(cursor.id);
+    depth++;
+    cursor = unitsById.get(cursor.parent_id);
+  }
+  return depth;
+}
+
+function orgUnitLabel(unit, unitsById) {
+  return '— '.repeat(orgUnitDepth(unit.id, unitsById)) + unit.name;
+}
+
+async function populateProgressOrgUnitSelect() {
+  const sel = document.getElementById('progress-org-unit-select');
+  if (!sel) return;
+  try {
+    const resp = await callGAS('listOrgUnits', {});
+    const units = (resp.status === 'success' ? (resp.data || []) : []).filter(u => u.group_key === 'science');
+    const unitsById = new Map(units.map(u => [u.id, u]));
+    const opts = units.map(u => `<option value="${u.id}">${escapeHtml(orgUnitLabel(u, unitsById))}</option>`).join('');
+    sel.innerHTML = '<option value="">-- Không thuộc tổ nào --</option>' + opts;
+  } catch (err) {
+    console.error('Lỗi tải danh sách tổ cho form dự án:', err);
   }
 }
 
