@@ -7028,6 +7028,11 @@ async function handleSciRoleRevoke(btn) {
     brandPane.addEventListener('pointerleave', function () { parallax.style.transform = ''; });
 })();
 
+// Mô hình quỹ đạo nguyên tử -- hạt nhân thở nhịp ở giữa, 3 quỹ đạo elip nghiêng góc
+// khác nhau, mỗi quỹ đạo có 1 electron chạy vòng liên tục. Khớp với chính icon
+// nguyên tử (fa-atom) app đã dùng làm logo -- trật tự, khoa học, khác hẳn mạng lưới
+// hữu cơ của org. Thay cho mạng lưới điểm-nối-điểm (đợt trước) theo yêu cầu người
+// dùng: hiệu ứng phải mang ý nghĩa riêng của Sci. Đã duyệt qua mockup trước khi lắp.
 (function () {
     var canvas = document.getElementById('login-net-canvas');
     var pane = document.getElementById('login-brand-pane');
@@ -7035,16 +7040,13 @@ async function handleSciRoleRevoke(btn) {
     var ctx = canvas.getContext('2d');
     var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     var W = 0, H = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
-    var nodes = [];
     var hub = { x: 0, y: 0 };
-    var pointer = { x: -9999, y: -9999, active: false };
     var t = 0;
-    var NODE_COUNT = 26, LINK_DIST = 170, POINTER_DIST = 240;
-    // Màu mạng lưới: teal-light tint (sci) thay vì navy-light (org) -- literal, không
-    // theo theme vì brand pane luôn tối.
-    var LINE_RGB = '108, 199, 178';
-    var HUB_GLOW_RGB = '130, 214, 194';
-    var HUB_FILL = '#EAFBF5';
+    var orbits = [
+        { rx: 0, ry: 0, rot: 0.15, speed: 0.014, phase: 0 },
+        { rx: 0, ry: 0, rot: -0.55, speed: -0.010, phase: 2 },
+        { rx: 0, ry: 0, rot: 1.15, speed: 0.008, phase: 4 }
+    ];
 
     function resize() {
         var rect = pane.getBoundingClientRect();
@@ -7052,106 +7054,71 @@ async function handleSciRoleRevoke(btn) {
         canvas.width = W * dpr; canvas.height = H * dpr;
         canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        hub.x = W * 0.30; hub.y = H * 0.38;
+        hub.x = W * 0.42; hub.y = H * 0.46;
+        var base = Math.min(W, H) * 0.34;
+        orbits[0].rx = base * 1.15; orbits[0].ry = base * 0.44;
+        orbits[1].rx = base * 0.95; orbits[1].ry = base * 0.62;
+        orbits[2].rx = base * 0.75; orbits[2].ry = base * 0.78;
     }
 
-    function seed() {
-        nodes = [];
-        for (var i = 0; i < NODE_COUNT; i++) {
-            var radius = 90 + Math.random() * Math.min(W, H) * 0.62;
-            var angle = Math.random() * Math.PI * 2;
-            var speed = (0.10 + Math.random() * 0.22) * (Math.random() < 0.5 ? 1 : -1);
-            nodes.push({
-                orbitR: radius, angle: angle, speed: speed / radius * 26,
-                bob: Math.random() * Math.PI * 2,
-                r: 1.3 + Math.random() * 2.1,
-                depth: 0.5 + Math.random() * 0.5
-            });
-        }
-    }
-
-    function step() {
-        t += 1;
-        for (var i = 0; i < nodes.length; i++) {
-            var n = nodes[i];
-            n.angle += n.speed * 0.01;
-            n.x = hub.x + Math.cos(n.angle) * n.orbitR;
-            n.y = hub.y + Math.sin(n.angle) * n.orbitR * 0.72 + Math.sin(t * 0.01 + n.bob) * 8;
-        }
-    }
+    function step() { t += 1; }
 
     function draw() {
         ctx.clearRect(0, 0, W, H);
-        for (var i = 0; i < nodes.length; i++) {
-            var a = nodes[i];
-            var dxh = a.x - hub.x, dyh = a.y - hub.y;
-            var dh = Math.sqrt(dxh * dxh + dyh * dyh);
-            if (dh < LINK_DIST * 2.4) {
-                var alphaH = Math.max(0, (1 - dh / (LINK_DIST * 2.4))) * 0.5 * a.depth;
-                ctx.strokeStyle = 'rgba(' + LINE_RGB + ', ' + alphaH + ')';
-                ctx.lineWidth = 1;
-                ctx.beginPath(); ctx.moveTo(hub.x, hub.y); ctx.lineTo(a.x, a.y); ctx.stroke();
-            }
-            for (var j = i + 1; j < nodes.length; j++) {
-                var b = nodes[j];
-                var dx = a.x - b.x, dy = a.y - b.y;
-                var d = Math.sqrt(dx * dx + dy * dy);
-                if (d < LINK_DIST) {
-                    var alpha = (1 - d / LINK_DIST) * 0.24 * Math.min(a.depth, b.depth);
-                    ctx.strokeStyle = 'rgba(' + LINE_RGB + ', ' + alpha + ')';
-                    ctx.lineWidth = 1;
-                    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-                }
-            }
-            if (pointer.active) {
-                var pdx = a.x - pointer.x, pdy = a.y - pointer.y;
-                var pd = Math.sqrt(pdx * pdx + pdy * pdy);
-                if (pd < POINTER_DIST) {
-                    var palpha = (1 - pd / POINTER_DIST) * 0.6;
-                    ctx.strokeStyle = 'rgba(230, 250, 244, ' + palpha + ')';
-                    ctx.lineWidth = 1;
-                    ctx.beginPath(); ctx.moveTo(pointer.x, pointer.y); ctx.lineTo(a.x, a.y); ctx.stroke();
-                }
-            }
-        }
-        for (var k = 0; k < nodes.length; k++) {
-            var node = nodes[k];
+        for (var i = 0; i < orbits.length; i++) {
+            var o = orbits[i];
             ctx.save();
-            ctx.shadowColor = 'rgba(' + LINE_RGB + ', 0.9)';
-            ctx.shadowBlur = 8 * node.depth;
+            ctx.strokeStyle = 'rgba(108, 199, 178, 0.22)';
+            ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.arc(node.x, node.y, node.r, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(' + HUB_GLOW_RGB + ', ' + (0.55 + node.depth * 0.4) + ')';
+            ctx.ellipse(hub.x, hub.y, o.rx, o.ry, o.rot, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+
+            // Vị trí electron trên quỹ đạo -- tham số hoá elip rồi xoay theo góc nghiêng
+            // của chính quỹ đạo đó (không dùng ctx.ellipse cho electron vì cần toạ độ
+            // x/y thật để vẽ chấm sáng, không chỉ vẽ đường viền).
+            var theta = t * o.speed + o.phase;
+            var ex0 = Math.cos(theta) * o.rx, ey0 = Math.sin(theta) * o.ry;
+            var ex = hub.x + ex0 * Math.cos(o.rot) - ey0 * Math.sin(o.rot);
+            var ey = hub.y + ex0 * Math.sin(o.rot) + ey0 * Math.cos(o.rot);
+            ctx.save();
+            ctx.shadowColor = 'rgba(130, 214, 194, 0.95)';
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.arc(ex, ey, 3.2, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(214, 247, 238, 0.95)';
             ctx.fill();
             ctx.restore();
         }
         ctx.save();
-        ctx.shadowColor = 'rgba(' + HUB_GLOW_RGB + ', 1)';
-        ctx.shadowBlur = reduceMotion ? 22 : (20 + Math.sin(t * 0.012) * 6);
+        ctx.shadowColor = 'rgba(130, 214, 194, 1)';
+        ctx.shadowBlur = reduceMotion ? 22 : (22 + Math.sin(t * 0.03) * 6);
         ctx.beginPath();
-        ctx.arc(hub.x, hub.y, 4.5, 0, Math.PI * 2);
-        ctx.fillStyle = HUB_FILL;
+        ctx.arc(hub.x, hub.y, 6, 0, Math.PI * 2);
+        ctx.fillStyle = '#EAFBF5';
         ctx.fill();
         ctx.restore();
-        if (pointer.active) {
-            ctx.save();
-            ctx.shadowColor = 'rgba(230, 250, 244, 1)'; ctx.shadowBlur = 14;
-            ctx.beginPath(); ctx.arc(pointer.x, pointer.y, 3, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(230, 250, 244, 0.95)'; ctx.fill();
-            ctx.restore();
-        }
     }
 
     function loop() { step(); draw(); requestAnimationFrame(loop); }
 
-    pane.addEventListener('pointermove', function (e) {
-        var rect = pane.getBoundingClientRect();
-        pointer.x = e.clientX - rect.left; pointer.y = e.clientY - rect.top;
-        pointer.active = true;
-    });
-    pane.addEventListener('pointerleave', function () { pointer.active = false; });
-    window.addEventListener('resize', function () { resize(); });
+    // #auth-modal vẫn display:none lúc script.js chạy (auth.onAuthStateChange chỉ mở
+    // modal SAU khi Supabase xác nhận không có session, việc này luôn bất đồng bộ --
+    // không thể chạy trước khi toàn bộ script.js thực thi xong theo thứ tự đồng bộ) --
+    // resize() gọi ngay ở đây đo được pane rỗng (0x0) vì tổ tiên còn ẩn, khiến quỹ đạo
+    // có bán kính 0. ResizeObserver tự bắn lại đúng kích thước thật ngay khi #auth-modal
+    // chuyển sang hiện, không cần đụng gì tới lockApp()/openAuthModal(). Thay hẳn cho
+    // window 'resize' (ResizeObserver cũng bắt được windowresize vì layout con đổi theo).
+    // Không cần seed lại như bên Fin -- orbits[].rx/ry được tính lại hoàn toàn mới mỗi
+    // lần resize() chạy, không giữ trạng thái cũ bị kẹt.
+    if (window.ResizeObserver) {
+        var ro = new ResizeObserver(function () { resize(); if (reduceMotion) draw(); });
+        ro.observe(pane);
+    } else {
+        window.addEventListener('resize', function () { resize(); });
+    }
 
-    resize(); seed(); step(); draw();
+    resize(); draw();
     if (!reduceMotion) requestAnimationFrame(loop);
 })();
