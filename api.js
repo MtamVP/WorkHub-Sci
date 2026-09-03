@@ -2373,7 +2373,8 @@ const MUTATING_ACTIONS = new Set([
     'provisionUser', 'updateUserGroup', 'removeUser', 'setUserActive', 'updateNickname',
     'grantSciRole', 'revokeSciRole', 'updateMemberRole',
     'savePersonalItem', 'deletePersonalItem', 'setPersonalItemFlags',
-    'saveCalendarConnection', 'disconnectCalendarConnection',
+    'saveCalendarConnection', 'disconnectCalendarConnection', 'touchCalendarSync',
+    'upsertGoogleEvents', 'pruneGoogleEvents',
     'createOrgUnit', 'updateOrgUnit', 'deleteOrgUnit', 'assignUserOrgUnit',
     'restoreFromBackup'
 ]);
