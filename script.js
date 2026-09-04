@@ -748,7 +748,11 @@ function showToast(message, type) {
     showConfirmButton: false,
     timer: 2500,
     timerProgressBar: true
-  }).fire({ icon, title: String(message == null ? '' : message) });
+  // SweetAlert2's `title` render as HTML (không phải text thuần) -- trước đây truyền thẳng
+  // message chưa qua escape, và handleSsoLoginClick() đưa error_description từ query param
+  // trên redirect OAuth (1 IdP giả mạo/bị xâm nhập có thể nhét bất cứ gì vào đó) thẳng vào
+  // đây, mở đường XSS ngay trên trang login.
+  }).fire({ icon, title: escapeHtml(message == null ? '' : message) });
 }
 
 function openAppModal(id) {
