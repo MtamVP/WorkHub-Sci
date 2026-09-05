@@ -110,6 +110,33 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Bôi đen văn bản trước đây dùng màu xanh mặc định của trình duyệt thay vì tông app
+   (đồng bộ với wh-org). */
+::selection { background-color: var(--cyan-accent); color: #fff; }
+
+/* Trước đây không có :focus-visible riêng -- phần tử focus qua bàn phím (Tab) chỉ có
+   outline mặc định của trình duyệt, dễ vô hình trên nền tối/card custom (đồng bộ với
+   wh-org, vốn đã có rule này). */
+*:focus:not(:focus-visible) { outline: none; }
+*:focus-visible {
+  outline: 2px solid var(--cyan-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Trước đây chỉ tắt animation ở skeleton loader và riêng màn đăng nhập khi
+   prefers-reduced-motion -- mọi animation khác trong app (hover card, modal pop, toast,
+   kéo-thả kanban...) vẫn chạy đầy đủ, bỏ sót phần lớn app (đồng bộ với wh-org, vốn đã có
+   rule toàn cục này). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 body {
   font-family: var(--font-body);
   background-color: var(--bg-color);
@@ -939,6 +966,14 @@ body.app-locked .user-profile-wrapper {
   background: var(--card-bg-elevated);
 }
 
+/* Input/select bị disabled trước đây không có style riêng -- rơi vào nền trắng/chữ đen
+   mặc định của trình duyệt bất kể theme, đặc biệt chói ở dark mode (đồng bộ với wh-org). */
+.form-control:disabled, .form-select:disabled {
+  background-color: var(--hover-bg) !important;
+  color: var(--text-muted) !important;
+  border-color: var(--border-color) !important;
+}
+
 .user-profile-wrapper {
   position: relative;
 }
@@ -1241,6 +1276,10 @@ body.app-locked .user-profile-wrapper {
 #checkboxes input[type="checkbox"], #event-attendee-checkboxes input[type="checkbox"], #blocker-checkboxes input[type="checkbox"], #comment-mention-checkboxes input[type="checkbox"] {
   margin-right: 12px; width: 16px; height: 16px; cursor: pointer; accent-color: var(--cyan-accent);
 }
+
+/* Spinner (fa-spin) trước đây không có màu riêng -- lấy màu icon mặc định của trình
+   duyệt thay vì tông app, trông như chưa xong mỗi lần tải dữ liệu (đồng bộ với wh-org). */
+.fa-spin { color: var(--text-muted); opacity: 0.85; }
 
 /* ==========================================================================
    SKELETON LOADING (Task/Progress/Calendar first load)
