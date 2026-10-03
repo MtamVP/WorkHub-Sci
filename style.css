@@ -2600,3 +2600,11 @@ body.auth-page #toast-container { left: 50%; right: auto; top: 24px; transform: 
   .login-brand-pane { padding: 24px 28px; min-height: 200px; }
 }
 
+/* Không Gian Riêng v4 (personal-hub.css dùng chung 3 app): màu nhấn theo accent riêng của Sci */
+body {
+  --phub-accent: var(--science-accent);
+  --phub-accent-dim: color-mix(in srgb, var(--science-accent) 16%, transparent);
+  --phub-accent-light: color-mix(in srgb, var(--science-accent) 62%, white);
+  --phub-accent-deep: color-mix(in srgb, var(--science-accent) 78%, black);
+  --phub-on-accent: #fff;
+}
